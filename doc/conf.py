@@ -25,7 +25,7 @@ subprocess.run('./gen-readme.sh')
 # -- Project information -----------------------------------------------------
 
 project = u'MP-SPDZ'
-copyright = u'2024, CSIRO\'s Data61'
+copyright = u'2025, CSIRO\'s Data61'
 author = u'Marcel Keller'
 
 # The short X.Y version

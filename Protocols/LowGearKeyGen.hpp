@@ -29,7 +29,7 @@ KeyGenProtocol<X, L>::KeyGenProtocol(Player& P, const FHE_Params& params,
 
     auto& batch_size = OnlineOptions::singleton.batch_size;
     backup_batch_size = batch_size;
-    batch_size = 100;
+    batch_size = min(100, batch_size);
 
     if (OnlineOptions::singleton.live_prep)
     {
@@ -193,6 +193,7 @@ template<int L>
 template<class FD>
 void LowGearKeyGen<L>::run(PairwiseSetup<FD>& setup)
 {
+    CODE_LOCATION
     generate_keys(setup.params);
     machine.sk.check(machine.pk, setup.FieldD);
 

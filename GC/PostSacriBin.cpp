@@ -61,6 +61,7 @@ PostSacriBin::T PostSacriBin::finalize_mul(int n)
 
 void PostSacriBin::check()
 {
+    CODE_LOCATION
     vector<array<T, 3>> to_check;
     assert(inputs.size() == outputs.size());
     for (size_t i = 0; i < inputs.size(); i++)

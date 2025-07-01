@@ -28,6 +28,8 @@ template<class T>
 InputBase<T>::InputBase(SubProcessor<T>* proc) :
         InputBase(proc ? proc->Proc : 0)
 {
+    if (proc)
+        P = &proc->P;
 }
 
 template<class T>
@@ -38,7 +40,7 @@ Input<T>::Input(SubProcessor<T>& proc) :
 
 template<class T>
 Input<T>::Input(SubProcessor<T>& proc, MAC_Check& mc) :
-        InputBase<T>(proc.Proc), proc(&proc), MC(mc), prep(proc.DataF), P(proc.P),
+        InputBase<T>(&proc), proc(&proc), MC(mc), prep(proc.DataF), P(proc.P),
         shares(proc.P.num_players())
 {
 }
@@ -64,6 +66,13 @@ InputBase<T>::~InputBase()
     if (timer.elapsed() > 0)
         cerr << T::type_string() << " inputs: " << timer.elapsed() << endl;
 #endif
+}
+
+template<class T>
+bool InputBase<T>::is_me(int player, int)
+{
+    assert(P);
+    return player == P->my_num();
 }
 
 template<class T>
@@ -150,14 +159,15 @@ void InputBase<T>::raw_input(SubProcessor<T>& proc, const vector<int>& args,
     {
         int player = *it++;
         it++;
-        if (player == P.my_num())
+        if (is_me(player))
         {
             for (int i = 0; i < size; i++)
             {
                 clear t;
                 try
                 {
-                    this->buffer.input(t);
+                    if (T::real_shares(P))
+                        this->buffer.input(t);
                 }
                 catch (not_enough_to_buffer& e)
                 {
@@ -222,12 +232,14 @@ void InputBase<T>::prepare(SubProcessor<T>& Proc, int player, const int* params,
 {
     auto& input = Proc.input;
     assert(Proc.Proc != 0);
-    if (player == Proc.P.my_num())
+    if (input.is_me(player))
     {
         for (int j = 0; j < size; j++)
         {
-            U tuple = Proc.Proc->template get_input<U>(Proc.Proc->use_stdin(),
-                    params);
+            U tuple;
+            if (T::real_shares(Proc.P))
+                tuple = Proc.Proc->template get_input<U>(
+                        Proc.Proc->use_stdin(), params);
             for (auto x : tuple.items)
                 input.add_mine(x);
         }

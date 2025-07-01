@@ -1,6 +1,7 @@
 
 #include "FHE/Ring_Element.h"
 #include "Tools/Exceptions.h"
+#include "Tools/CodeLocations.h"
 #include "FHE/FFT.h"
 
 #include "Math/modp.hpp"
@@ -153,6 +154,8 @@ void sub(Ring_Element& ans,const Ring_Element& a,const Ring_Element& b)
 
 void mul(Ring_Element& ans,const Ring_Element& a,const Ring_Element& b)
 {
+  CODE_LOCATION
+
   assert(a.FFTD);
   if (a.rep!=b.rep)   { throw rep_mismatch(); }
   if (a.FFTD!=b.FFTD) { throw pr_mismatch();  }
@@ -296,6 +299,8 @@ Ring_Element& Ring_Element::operator *=(const modp& other)
 
 Ring_Element Ring_Element::mul_by_X_i(int j) const
 {
+  CODE_LOCATION
+
   assert(FFTD);
   Ring_Element ans;
   ans.prepare(*this);

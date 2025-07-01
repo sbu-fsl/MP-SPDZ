@@ -8,11 +8,12 @@
 
 #include "OnlineOptions.h"
 
-template<class T>
+template<class T, class V>
 OnlineOptions::OnlineOptions(ez::ezOptionParser& opt, int argc,
-        const char** argv, T, bool default_live_prep) :
+        const char** argv, T, bool default_live_prep, V) :
         OnlineOptions(opt, argc, argv, OnlineOptions(T()).batch_size,
-                default_live_prep, T::clear::prime_field)
+                default_live_prep, T::clear::prime_field,
+                T::LivePrep::homomorphic or T::malicious)
 {
     if (T::has_trunc_pr)
         opt.add(
@@ -58,6 +59,7 @@ OnlineOptions::OnlineOptions(ez::ezOptionParser& opt, int argc,
     }
 
     if (not T::clear::binary)
+    {
         opt.add(
               "", // Default.
               0, // Required?
@@ -68,6 +70,19 @@ OnlineOptions::OnlineOptions(ez::ezOptionParser& opt, int argc,
               "-D", // Flag token.
               "--disk-memory" // Flag token.
         );
+
+        opt.add(
+              to_string(V::default_degree()).c_str(), // Default.
+              0, // Required?
+              1, // Number of args expected.
+              0, // Delimiter if expecting multiple args.
+              ("Bit length of GF(2^n) field (default: "
+                      + to_string(V::default_degree()) + "; options are "
+                      + V::options() + ")").c_str(), // Help description.
+              "-lg2", // Flag token.
+              "--lg2" // Flag token.
+        );
+    }
 
     if (T::variable_players)
         opt.add(

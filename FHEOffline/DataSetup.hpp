@@ -67,7 +67,7 @@ void read_or_generate_secrets(T& setup, Player& P, U& machine,
 template <class T, class U, class V>
 void secure_init(T& setup, Player& P, U& machine, int sec, V, true_type)
 {
-    OnlineOptions::singleton.prime = V::pr();
+    OnlineOptions::singleton.prime = V::pr(true);
     setup.secure_init(P, machine,
             V::length() ? V::length() : OnlineOptions::singleton.lgp, sec);
 }

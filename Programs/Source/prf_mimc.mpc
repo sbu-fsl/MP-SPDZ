@@ -64,7 +64,6 @@ class MiMC(object):
     def get_rounds_constants(self):
         return [sint.get_random_triple()[0].reveal() for i in range(self.rounds)] 
 
-    @vectorize
     def encrypt(self, m):
         key = self.key
         x = m + key

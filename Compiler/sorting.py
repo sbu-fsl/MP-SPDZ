@@ -21,6 +21,7 @@ def reveal_sort(k, D, reverse=False):
       backward order
 
     """
+    library.get_program().reading('sorting', 'HICT14')
     comparison.require_ring_size(util.log2(len(k)) + 1, 'sorting')
     assert len(k) == len(D)
     library.break_point()

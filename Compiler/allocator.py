@@ -499,14 +499,15 @@ class Merger:
         def mem_access(n, instr, last_access_this_kind, last_access_other_kind):
             addr = instr.args[1]
             reg_type = instr.args[0].reg_type
+            budget = block.parent.program.budget
             if isinstance(addr, int):
-                for i in range(min(instr.get_size(), 100)):
+                for i in range(min(instr.get_size(), budget)):
                     addr_i = addr + i
                     handle_mem_access(addr_i, reg_type, last_access_this_kind,
                                       last_access_other_kind)
                 if block.warn_about_mem and \
                    not block.parent.warned_about_mem and \
-                   (instr.get_size() > 100) and not instr._protect:
+                   (instr.get_size() > budget) and not instr._protect:
                     print('WARNING: Order of memory instructions ' \
                         'not preserved due to long vector, errors possible')
                     block.parent.warned_about_mem = True
@@ -593,7 +594,7 @@ class Merger:
                 keep_text_order(instr, n)
             elif isinstance(instr, RawInputInstruction):
                 keep_merged_order(instr, n, RawInputInstruction)
-            elif isinstance(instr, matmulsm):
+            elif isinstance(instr, matmulsm_class):
                 if options.preserve_mem_order:
                     strict_mem_access(n, last_mem_read, last_mem_write)
                 else:
@@ -735,7 +736,7 @@ class Merger:
         G.get_attr(i, 'merges').append(j)
         G.remove_node(j)
 
-    def eliminate_dead_code(self):
+    def eliminate_dead_code(self, only_ldint=False):
         instructions = self.instructions
         G = self.G
         merge_nodes = self.open_nodes
@@ -744,6 +745,8 @@ class Merger:
         stats = defaultdict(lambda: 0)
         for i,inst in zip(range(len(instructions) - 1, -1, -1), reversed(instructions)):
             if inst is None:
+                continue
+            if only_ldint and not isinstance(inst, ldint_class):
                 continue
             can_eliminate_defs = True
             for reg in inst.get_def():
@@ -800,7 +803,9 @@ class RegintOptimizer:
             self.rev_offset_cache[new_base.i, new_offset, multiplier] = res
 
     def run(self, instructions, program):
+        changed = defaultdict(int)
         for i, inst in enumerate(instructions):
+            pre = inst
             if isinstance(inst, ldint_class):
                 self.cache[inst.args[0]] = inst.args[1]
             elif isinstance(inst, incint):
@@ -882,8 +887,12 @@ class RegintOptimizer:
                     cond = self.cache[inst.args[0]]
                     if not cond:
                         instructions[i] = None
+            if pre != instructions[i]:
+                changed[type(inst).__name__] += 1
         pre = len(instructions)
         instructions[:] = list(filter(lambda x: x is not None, instructions))
         post = len(instructions)
+        if changed and program.options.verbose:
+            print('regint optimizer changed:', dict(changed))
         if pre != post and program.options.verbose:
             print('regint optimizer removed %d instructions' % (pre - post))

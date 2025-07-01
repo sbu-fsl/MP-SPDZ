@@ -23,7 +23,7 @@ class Rep4Input : public InputBase<T>
 
 public:
     Rep4Input(SubProcessor<T>& proc, MAC_Check_Base<T>&);
-    Rep4Input(MAC_Check_Base<T>&, Preprocessing<T>&, Player& P);
+    Rep4Input(MAC_Check_Base<T>&, Preprocessing<T>&, Player& P, Rep4<T>* = 0);
     ~Rep4Input();
 
     void reset(int player);

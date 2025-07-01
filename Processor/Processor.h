@@ -285,6 +285,7 @@ class Processor : public ArithmeticProcessor
   void convcintvec(const Instruction& instruction);
   void convcbit2s(const Instruction& instruction);
   void split(const Instruction& instruction);
+  void unsplit(const Instruction& instruction);
 
   // Access to external client sockets for reading clear/shared data
   void read_socket_ints(int client_id, const vector<int>& registers, int size);
@@ -302,7 +303,7 @@ class Processor : public ArithmeticProcessor
   void fixinput(const Instruction& instruction);
 
   // synchronize in asymmetric protocols
-  long sync(long x) const;
+  long sync(long x);
 
   ofstream& get_public_output();
   ofstream& get_binary_output();

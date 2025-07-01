@@ -33,9 +33,10 @@ protected:
     Timer timer;
 
     // Send my inputs (not generally available)
-    virtual void send_mine() { throw not_implemented(); }
+    virtual void send_mine() { throw runtime_error("implement send_mine()"); }
     // Get share for next input of mine (not generally available)
-    virtual T finalize_mine() { throw not_implemented(); }
+    virtual T finalize_mine()
+    { throw runtime_error("implement finalize_mine()"); }
     // Store share for next input from ``player`` from buffer ``o``
     // in ``target`` (not generally available)
     virtual void finalize_other(int, T&, octetStream&, int = -1)
@@ -59,6 +60,8 @@ public:
     InputBase(ArithmeticProcessor* proc = 0);
     InputBase(SubProcessor<T>* proc);
     virtual ~InputBase();
+
+    bool virtual is_me(int player, int = -1);
 
     /// Initialize input round for ``player``
     virtual void reset(int player) = 0;

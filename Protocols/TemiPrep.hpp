@@ -61,6 +61,7 @@ const TemiSetup<typename T::clear::FD>& TemiPrep<T>::get_setup()
 template<class T>
 void TemiPrep<T>::buffer_triples()
 {
+    CODE_LOCATION
     lock.lock();
     if (setup == 0)
     {

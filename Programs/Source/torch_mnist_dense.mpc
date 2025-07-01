@@ -1,6 +1,7 @@
 # this trains a dense neural network on MNIST
 
 program.options_from_args()
+sfix.set_precision_from_args(program)
 
 import torchvision
 

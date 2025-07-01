@@ -64,7 +64,12 @@ def ld2i(c, n):
         t1 = t2
     movc(c, t1)
 
-def require_ring_size(k, op):
+def maybe_mulm(res, x, y):
+    # overwrite instruction for function-dependent preprocessing protocols
+    from Compiler import types
+    res.link(x * y)
+
+def require_ring_size(k, op, suffix=''):
     if not program.options.ring:
         return
     if int(program.options.ring) < k:
@@ -72,7 +77,7 @@ def require_ring_size(k, op):
             'with \'-R %d\' or more' % (op, k)
         if k > 64 and k < 128:
             msg += ' (maybe \'-R 128\' as it is supported by default)'
-        raise CompilerError(msg)
+        raise CompilerError(msg + suffix)
     program.curr_tape.require_bit_length(k)
 
 @instructions_base.cisc
@@ -82,17 +87,23 @@ def LTZ(s, a, k):
 
     k: bit length of a
     """
-    movs(s, program.non_linear.ltz(a, k))
+    program.curr_block.replace_last_reg(s, program.non_linear.ltz(a, k))
 
 def LtzRing(a, k):
+    from .types import sint
+    return sint.conv(LtzRingRaw(a, k))
+
+def LtzRingRaw(a, k):
     from .types import sint, _bitint
     from .GC.types import sbitvec
     if program.use_split():
+        program.reading('comparison', 'ABY3')
         summands = a.split_to_two_summands(k)
         carry = CarryOutRawLE(*reversed(list(x[:-1] for x in summands)))
         msb = carry ^ summands[0][-1] ^ summands[1][-1]
-        return sint.conv(msb)
+        return msb
     else:
+        program.reading('comparison', 'DEK20-pre')
         from . import floatingpoint
         require_ring_size(k, 'comparison')
         m = k - 1
@@ -103,7 +114,7 @@ def LtzRing(a, k):
         a = r_bin[0].bit_decompose_clear(c_prime, m)
         b = r_bin[:m]
         u = CarryOutRaw(a[::-1], b[::-1])
-        return sint.conv(r_bin[m].bit_xor(c_prime >> m).bit_xor(u))
+        return r_bin[m].bit_xor(c_prime >> m).bit_xor(u)
 
 def LessThanZero(a, k):
     from . import types
@@ -129,6 +140,7 @@ def Trunc(d, a, k, m, signed):
 def TruncRing(d, a, k, m, signed):
     program.curr_tape.require_bit_length(1)
     if program.use_split() in (2, 3):
+        program.reading('truncation', 'ABY3')
         if signed:
             a += (1 << (k - 1))
         from Compiler.types import sint
@@ -183,6 +195,7 @@ def TruncLeakyInRing(a, k, m, signed):
     if k == m:
         return 0
     assert k > m
+    program.reading('truncation', 'DEK20-pre')
     require_ring_size(k, 'leaky truncation')
     from .types import sint, intbitint, cint, cgf2n
     n_bits = k - m
@@ -226,6 +239,7 @@ def Mod2m(a_prime, a, k, m, signed):
     movs(a_prime, program.non_linear.mod2m(a, k, m, signed))
 
 def Mod2mRing(a_prime, a, k, m, signed):
+    program.reading('modulo', 'DEK20-pre')
     require_ring_size(k, 'modulo power of two')
     from Compiler.types import sint, intbitint, cint
     shift = int(program.options.ring) - m
@@ -240,6 +254,7 @@ def Mod2mRing(a_prime, a, k, m, signed):
     return res
 
 def Mod2mField(a_prime, a, k, m, signed):
+    program.reading('modulo', 'CdH10')
     from .types import sint
     r_dprime = program.curr_block.new_reg('s')
     r_prime = program.curr_block.new_reg('s')
@@ -489,15 +504,18 @@ def PreMulC_with_inverses_and_vectors(p, a):
 
     Variant for vector registers using preprocessed inverses.
     """
+    from Compiler.types import _types
+    sint = _types[a[0].reg_type]
+    cint = sint.clear_type
     k = len(p)
-    a_vec = program.curr_block.new_reg('s', size=k)
-    r = program.curr_block.new_reg('s', size=k)
-    w = program.curr_block.new_reg('s', size=k)
-    w_tmp = program.curr_block.new_reg('s', size=k)
-    z = program.curr_block.new_reg('s', size=k)
-    m = program.curr_block.new_reg('c', size=k)
-    t = [program.curr_block.new_reg('s', size=k) for i in range(1)]
-    c = [program.curr_block.new_reg('c') for i in range(k)]
+    a_vec = sint(size=k)
+    r = sint(size=k)
+    w = sint(size=k)
+    w_tmp = sint(size=k)
+    z = sint(size=k)
+    m = cint(size=k)
+    t = [sint(size=k) for i in range(1)]
+    c = [cint() for i in range(k)]
     # warning: computer scientists count from 0
     if do_precomp:
         vinverse(k, r, z)
@@ -521,13 +539,16 @@ def PreMulC_with_inverses(p, a):
     The latter are triples of the form (a_i, a_i^{-1}, a_i * a_{i-1}^{-1}).
     See also make_PreMulC() in Fake-Offline.cpp.
     """
+    from Compiler.types import _types
+    sint = _types[a[0].reg_type]
+    cint = sint.clear_type
     k = len(a)
-    r = [[program.curr_block.new_reg('s') for i in range(k)] for j in range(3)]
-    w = [[program.curr_block.new_reg('s') for i in range(k)] for j in range(2)]
-    z = [program.curr_block.new_reg('s') for i in range(k)]
-    m = [program.curr_block.new_reg('c') for i in range(k)]
-    t = [[program.curr_block.new_reg('s') for i in range(k)] for i in range(1)]
-    c = [program.curr_block.new_reg('c') for i in range(k)]
+    r = [[sint() for i in range(k)] for j in range(3)]
+    w = [[sint() for i in range(k)] for j in range(2)]
+    z = [sint() for i in range(k)]
+    m = [cint() for i in range(k)]
+    t = [[sint() for i in range(k)] for i in range(1)]
+    c = [cint() for i in range(k)]
     # warning: computer scientists count from 0
     for i in range(k):
         if do_precomp:
@@ -548,18 +569,21 @@ def PreMulC_without_inverses(p, a):
     """
     Plain variant with no extra preprocessing.
     """
+    from Compiler.types import _types
+    sint = _types[a[0].reg_type]
+    cint = sint.clear_type
     k = len(a)
-    r = [program.curr_block.new_reg('s') for i in range(k)]
-    s = [program.curr_block.new_reg('s') for i in range(k)]
-    u = [program.curr_block.new_reg('c') for i in range(k)]
-    v = [program.curr_block.new_reg('s') for i in range(k)]
-    w = [program.curr_block.new_reg('s') for i in range(k)]
-    z = [program.curr_block.new_reg('s') for i in range(k)]
-    m = [program.curr_block.new_reg('c') for i in range(k)]
-    t = [[program.curr_block.new_reg('s') for i in range(k)] for i in range(2)]
-    #tt = [[program.curr_block.new_reg('s') for i in range(k)] for i in range(4)]
-    u_inv = [program.curr_block.new_reg('c') for i in range(k)]
-    c = [program.curr_block.new_reg('c') for i in range(k)]
+    r = [sint() for i in range(k)]
+    s = [sint() for i in range(k)]
+    u = [cint() for i in range(k)]
+    v = [sint() for i in range(k)]
+    w = [sint() for i in range(k)]
+    z = [sint() for i in range(k)]
+    m = [cint() for i in range(k)]
+    t = [[sint() for i in range(k)] for i in range(2)]
+    #tt = [[sint() for i in range(k)] for i in range(4)]
+    u_inv = [cint() for i in range(k)]
+    c = [cint() for i in range(k)]
     # warning: computer scientists count from 0
     for i in range(k):
         triple(s[i], r[i], t[0][i])
@@ -570,16 +594,16 @@ def PreMulC_without_inverses(p, a):
     for i in range(k-1):
         muls(v[i], r[i+1], s[i])
     w[0] = r[0]
-    one = program.curr_block.new_reg('c')
+    one = cint()
     ldi(one, 1)
     for i in range(k):
         divc(u_inv[i], one, u[i])
         # avoid division by zero, just for benchmarking
         #divc(u_inv[i], u[i], one)
     for i in range(1,k):
-        mulm(w[i], v[i-1], u_inv[i-1])
+        maybe_mulm(w[i], v[i-1], u_inv[i-1])
     for i in range(1,k):
-        mulm(z[i], s[i], u_inv[i])
+        maybe_mulm(z[i], s[i], u_inv[i])
     for i in range(k):
         muls(t[1][i], w[i], a[i])
         asm_open(True, m[i], t[1][i])
@@ -594,11 +618,11 @@ def PreMulC_end(p, a, c, m, z):
     for j in range(1,k):
         mulc(c[j], c[j-1], m[j])
         if isinstance(p, list):
-            mulm(p[j], z[j], c[j])
+            maybe_mulm(p[j], z[j], c[j])
     if isinstance(p, list):
         p[0] = a[0]
     else:
-        mulm(p, z[-1], c[-1])
+        maybe_mulm(p, z[-1], c[-1])
 
 def PreMulC(a):
     p = [type(a[0])() for i in range(len(a))]
@@ -631,6 +655,7 @@ def Mod2(a_0, a, k, signed):
     if k <= 1:
         movs(a_0, a)
         return
+    program.reading('modulo', 'CdH10')
     r_dprime = program.curr_block.new_reg('s')
     r_prime = program.curr_block.new_reg('s')
     r_0 = program.curr_block.new_reg('s')

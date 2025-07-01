@@ -30,8 +30,6 @@
 #include <atomic>
 using namespace std;
 
-#include "OnlineOptions.hpp"
-
 template<class sint, class sgf2n = NoShare<gf2n>>
 class Machine : public BaseMachine
 {
@@ -51,6 +49,10 @@ class Machine : public BaseMachine
   typename sint::bit_type::mac_key_type alphabi;
 
   Player* P;
+
+  RunningTimer setup_timer;
+
+  NamedCommStats max_comm;
 
   size_t load_program(const string& threadname, const string& filename);
 
@@ -82,7 +84,7 @@ class Machine : public BaseMachine
   static void init_binary_domains(int security_parameter, int lg2);
 
   Machine(Names& playerNames, bool use_encryption = true,
-          const OnlineOptions opts = sint(), int lg2 = 0);
+          const OnlineOptions opts = sint());
   ~Machine();
 
   const Names& get_N() { return N; }

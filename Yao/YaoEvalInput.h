@@ -8,7 +8,7 @@
 
 #include "YaoEvaluator.h"
 
-class YaoEvalInput
+class YaoEvalInput : public InputterBase
 {
 public:
 	YaoEvaluator& evaluator;

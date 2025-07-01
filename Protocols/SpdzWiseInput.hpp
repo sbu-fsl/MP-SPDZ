@@ -57,6 +57,7 @@ void SpdzWiseInput<T>::add_other(int player, int n_bits)
 template<class T>
 void SpdzWiseInput<T>::exchange()
 {
+    CODE_LOCATION
     part_input.exchange();
     honest_mult.init_mul();
     for (int i = 0; i < P.num_players(); i++)

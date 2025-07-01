@@ -148,6 +148,7 @@ def p_eval(p_c, x):
 # @return b2: \{0,1\} value. Returns one when reduction to
 # \pi is greater than \pi/2.
 def sTrigSub(x):
+    library.get_program().reading('trigonometric functions', 'AS19')
     # reduction to 2* \pi
     f = x * (1.0 / (2 * pi))
     f = trunc(f)
@@ -266,6 +267,7 @@ def exp2_fx(a, zero_output=False, as19=False):
 
     :return: :math:`2^a` if it is within the range. Undefined otherwise
     """
+    library.get_program().reading('exponential', 'AS19')
     def exp_from_parts(whole_exp, frac):
         class my_fix(type(a)):
             pass
@@ -346,7 +348,7 @@ def exp2_fx(a, zero_output=False, as19=False):
             if zero_output:
                 # should be for free
                 highest_bits = r_bits[0].ripple_carry_adder(
-                    masked_bits[n_bits:-1], [0] * (a.k - n_bits),
+                    masked_bits[n_bits:-1], [0] * (a.k - n_bits - 1),
                     carry_in=higher_bits[-1])
                 bits_to_check = [x.bit_xor(y)
                                  for x, y in zip(highest_bits[:-1],
@@ -434,6 +436,7 @@ def log2_fx(x, use_division=True):
     :return: (sfix) the value of :math:`\log_2(x)`
 
     """
+    library.get_program().reading('logarithm', 'AS19')
     if isinstance(x, types._fix):
         # transforms sfix to f*2^n, where f is [o.5,1] bounded
         # obtain number bounded by [0,5 and 1] by transforming input to sfloat
@@ -811,6 +814,7 @@ def sqrt(x, k=None, f=None):
 
     :return:  square root of :py:obj:`x` (sfix).
     """
+    library.get_program().reading('square root', 'AS19')
     if k is None:
         k = x.k
     if f is None:
@@ -832,6 +836,7 @@ def atan(x):
 
     :return:  arctan of :py:obj:`x` (sfix).
     """
+    library.get_program().reading('inverse trigonometric functions', 'AS19')
     # obtain absolute value of x
     s = x < 0
     x_abs  = s.if_else(-x, x)
@@ -937,6 +942,7 @@ def InvertSqrt(x, old=False):
     Reciprocal square root approximation by `Lu et al.
     <https://dl.acm.org/doi/10.1145/3411501.3419427>`_
     """
+    library.get_program().reading('approximate inverse square root', 'LFHH+20')
     class my_sfix(types.sfix):
         f = x.f
         k = x.k

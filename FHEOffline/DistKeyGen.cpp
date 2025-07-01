@@ -288,6 +288,7 @@ void check_randomness(vector<octetStream>& seeds,
 void Run_Gen_Protocol(FHE_PK& pk,FHE_SK& sk,const Player& P,int num_runs,
                       bool commit)
 {
+  CODE_LOCATION
   const FHE_Params& params=pk.get_params();
 
 #ifdef VERBOSE_KEYGEN

@@ -45,8 +45,10 @@ class octetStream
   friend class FlexBuffer;
   template<class T> friend class Exchanger;
 
-  size_t len,mxlen,ptr;  // len is the "write head", ptr is the "read head"
+  octet *ptr;
+  octet *end;
   octet *data;
+  octet *data_end;
 
   class BitBuffer
   {
@@ -65,6 +67,9 @@ class octetStream
 
   void reset();
 
+  void set_length(size_t len) { end = data + len; }
+  void set_max_length(size_t mxlen) { data_end = data + mxlen; }
+
   public:
 
   /// Increase allocation if needed
@@ -72,12 +77,16 @@ class octetStream
   void resize_precise(size_t l);
   void resize_min(size_t l);
   void reserve(size_t l);
+  template<class T>
+  void reserve(size_t l);
+  template<class T>
+  void require(size_t n_items);
   /// Free memory
   void clear();
 
   void assign(const octetStream& os);
 
-  octetStream() : len(0), mxlen(0), ptr(0), data(0) {}
+  octetStream() : ptr(0), end(0), data(0), data_end(0) {}
   /// Initial buffer
   octetStream(size_t len, const octet* source);
   /// Initial buffer
@@ -91,24 +100,24 @@ class octetStream
   ~octetStream() { if(data) delete[] data; }
   
   /// Number of bytes already read
-  size_t get_ptr() const     { return ptr; }
+  size_t get_ptr() const     { return ptr - data; }
   /// Length
-  size_t get_length() const  { return len; }
+  size_t get_length() const  { return end - data; }
   /// Length including size tag
-  size_t get_total_length() const  { return len + sizeof(len); }
+  size_t get_total_length() const  { return get_length() + sizeof(get_length()); }
   /// Allocation
-  size_t get_max_length() const { return mxlen; }
+  size_t get_max_length() const { return data_end - data; }
   /// Data pointer
   octet* get_data() const { assert(bits[0].n == 0); return data; }
   /// Read pointer
-  octet* get_data_ptr() const { assert(bits[1].n == 0); return data + ptr; }
+  octet* get_data_ptr() const { assert(bits[1].n == 0); return ptr; }
 
   /// Whether done reading
-  bool done() const 	  { return ptr == len; }
+  bool done() const 	  { return ptr == end; }
   /// Whether empty
-  bool empty() const 	  { return len == 0; }
+  bool empty() const 	  { return get_length() == 0; }
   /// Bytes left to read
-  size_t left() const 	  { return len - ptr; }
+  size_t left() const 	  { return end - ptr; }
 
   /// Convert to string
   string str() const;
@@ -123,12 +132,12 @@ class octetStream
   void concat(const octetStream& os);
 
   /// Reset reading
-  void reset_read_head()  { ptr = 0; bits[1].n = 0; }
+  void reset_read_head()  { ptr = data; bits[1].n = 0; }
   /// Set length to zero but keep allocation
-  void reset_write_head() { len = 0; bits[0].n = 0; reset_read_head(); }
+  void reset_write_head() { end = data; bits[0].n = 0; reset_read_head(); }
 
   // Move len back num
-  void rewind_write_head(size_t num) { len-=num; }
+  void rewind_write_head(size_t num) { end-=num; }
 
   bool equals(const octetStream& a) const;
   /// Equality test
@@ -146,6 +155,7 @@ class octetStream
   void consume(octet* x,const size_t l);
   // Return pointer to next l octets and advance pointer
   octet* consume(size_t l);
+  octet* consume_no_check(size_t l);
 
   void flush_bits();
 
@@ -199,13 +209,19 @@ class octetStream
   /// Append instance of type implementing ``pack``
   template<class T>
   void store(const T& x);
+  template<class T>
+  void store_no_resize(const T& x);
 
   /// Read instance of type implementing ``unpack``
   template<class T>
   T get();
+  template<class T>
+  T get_no_check();
   /// Read instance of type implementing ``unpack``
   template<class T>
   void get(T& ans);
+  template<class T>
+  void get_no_check(T& ans);
 
   // works for all statically allocated types
   template <class T>
@@ -235,7 +251,7 @@ class octetStream
   void consume(octetStream& s,size_t l)
     { s.resize(l);
       consume(s.data,l);
-      s.len=l;
+      s.set_length(l);
     }
 
   /// Append string
@@ -284,7 +300,7 @@ public:
 
 inline void octetStream::resize(size_t l)
 {
-  if (l<mxlen) { return; }
+  if (l < get_max_length()) { return; }
   l=2*l;      // Overcompensate in the resize to avoid calling this a lot
   resize_precise(l);
 }
@@ -292,29 +308,46 @@ inline void octetStream::resize(size_t l)
 
 inline void octetStream::resize_precise(size_t l)
 {
-  if (l == mxlen)
+  if (l == get_max_length())
     return;
 
+  auto read = get_ptr();
+  auto len = get_length();
   octet* nd=new octet[l];
   if (data)
     {
-      memcpy(nd, data, min(len, l) * sizeof(octet));
+      memcpy(nd, data, min(get_length(), l) * sizeof(octet));
       delete[] data;
     }
   data=nd;
-  mxlen=l;
+  ptr=nd+read;
+  set_length(len);
+  set_max_length(l);
 }
 
 inline void octetStream::resize_min(size_t l)
 {
-  if (l > mxlen)
+  if (l > get_max_length())
     resize_precise(l);
 }
 
 inline void octetStream::reserve(size_t l)
 {
-  if (len + l > mxlen)
-    resize_precise(len + l);
+  if (get_length() + l > get_max_length())
+    resize_precise(get_length() + l);
+}
+
+template<class T>
+void octetStream::reserve(size_t l)
+{
+  reserve(l * T::size());
+}
+
+template<class T>
+void octetStream::require(size_t n_items)
+{
+  if (left() < n_items * T::size())
+    throw runtime_error("insufficient data");
 }
 
 inline octet* octetStream::append(const size_t l)
@@ -324,10 +357,10 @@ inline octet* octetStream::append(const size_t l)
       flush_bits();
     }
 
-  if (len+l>mxlen)
-    resize(len+l);
-  octet* res = data + len;
-  len+=l;
+  if (end + l > data_end)
+    resize(get_length()+l);
+  octet* res = end;
+  end+=l;
   return res;
 }
 
@@ -338,16 +371,27 @@ inline void octetStream::append(const octet* x, const size_t l)
 
 inline void octetStream::append_no_resize(const octet* x, const size_t l)
 {
-  avx_memcpy(data+len,x,l*sizeof(octet));
-  len+=l;
+#ifdef CHECK_BUFFER_SIZE
+  assert(end + l <= data_end);
+#endif
+  avx_memcpy(end,x,l*sizeof(octet));
+  end+=l;
 }
 
 inline octet* octetStream::consume(size_t l)
 {
   bits[1].n = 0;
-  if(ptr + l > len)
+  if(ptr + l > end)
     throw runtime_error("insufficient data");
-  octet* res = data + ptr;
+  return consume_no_check(l);
+}
+
+inline octet* octetStream::consume_no_check(size_t l)
+{
+#ifdef CHECK_BUFFER_SIZE
+  assert(ptr + l <= end);
+#endif
+  octet* res = ptr;
   ptr += l;
   return res;
 }
@@ -452,8 +496,8 @@ inline char octetStream::get_bits(int n_bits)
 template<class T>
 inline void octetStream::Send(T socket_num) const
 {
-  send(socket_num,len,LENGTH_SIZE);
-  send(socket_num, get_data(), len);
+  send(socket_num,get_length(),LENGTH_SIZE);
+  send(socket_num, get_data(), get_length());
 }
 
 
@@ -462,11 +506,17 @@ inline void octetStream::Receive(T socket_num)
 {
   size_t nlen=0;
   receive(socket_num,nlen,LENGTH_SIZE);
-  len=0;
+  set_length(0);
   resize_min(nlen);
-  len=nlen;
+  set_length(nlen);
 
-  receive(socket_num,data,len);
+  size_t start = 0;
+  size_t chunk = 1 << 16l;
+  while (start < get_length())
+    {
+      receive(socket_num, data + start, min(chunk, get_length() - start));
+      start += chunk;
+    }
   reset_read_head();
 }
 
@@ -477,11 +527,31 @@ void octetStream::store(const T& x)
 }
 
 template<class T>
+void octetStream::store_no_resize(const T& x)
+{
+    append_no_resize((octet*) x.get_ptr(), x.size());
+}
+
+template<class T>
 T octetStream::get()
 {
     T res;
     res.unpack(*this);
     return res;
+}
+
+template<class T>
+T octetStream::get_no_check()
+{
+    T res;
+    get_no_check(res);
+    return res;
+}
+
+template<class T>
+void octetStream::get_no_check(T& res)
+{
+    res.assign(consume_no_check(T::size()));
 }
 
 template<class T>

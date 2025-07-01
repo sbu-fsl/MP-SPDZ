@@ -15,6 +15,10 @@ gdb_screen()
     screen -S :$1 -d -m bash -l -c "echo $*; echo $LIBRARY_PATH; gdb $prog -ex \"run $*\""
 }
 
+if ! test -e bmr-program-tparty.x -a -e bmr-program-party.x; then
+    make bmr
+fi
+
 killall -9 bmr-party.x bmr-tparty.x memcheck-amd64-valgrind callgrind-amd64-valgrind bmr-program-party.x bmr-program-tparty.x gdb
 dir=$(mktemp -d)
 rm -R bmr-log

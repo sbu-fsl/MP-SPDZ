@@ -52,6 +52,7 @@ PairwiseGenerator<FD>::~PairwiseGenerator()
 template <class FD>
 void PairwiseGenerator<FD>::run()
 {
+    CODE_LOCATION
     PRNG G;
     G.ReSeed();
     total = 0;
@@ -121,6 +122,7 @@ void PairwiseGenerator<FD>::run()
 template <class FD>
 void PairwiseGenerator<FD>::generate_inputs(int player)
 {
+    CODE_LOCATION
     bool mine = player == P.my_num();
     if (mine)
     {

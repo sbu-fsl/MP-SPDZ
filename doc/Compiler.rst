@@ -73,7 +73,7 @@ Compiler.ml module
 .. automodule:: Compiler.ml
    :members:
    :no-undoc-members:
-   :exclude-members: Tensor
+   :exclude-members: Tensor, my_squant
    :show-inheritance:
    :inherited-members:
 .. autofunction:: approx_sigmoid
@@ -108,13 +108,13 @@ Compiler.oram module
    :exclude-members: AbstractORAM, AtLeastOneRecursionIndexStructure,
 		     AtLeastOneRecursionPackedORAMWithEmpty, BaseORAM,
 		     BaseORAMIndexStructure, EmptyException, Entry,
-		     LinearORAM, LinearPackedORAM,
+		     LinearPackedORAM,
 		     LinearPackedORAMWithEmpty, List,
 		     LocalIndexStructure, LocalPackedIndexStructure,
 		     LocalPackedORAM, OneLevelORAM, OptimalPackedORAM,
 		     OptimalPackedORAMWithEmpty,
 		     PackedIndexStructure, PackedORAMWithEmpty, RAM,
-		     RecursiveIndexStructure, RecursiveORAM,
+		     RecursiveIndexStructure,
 		     RefBucket, RefRAM, RefTrivialORAM, TreeORAM,
 		     TrivialIndexORAM, TrivialORAM,
 		     TrivialORAMIndexStructure, ValueTuple, demux,

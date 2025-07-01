@@ -28,12 +28,6 @@ public:
         res.randomize_part(G, n_bits);
     }
 
-    void trunc_pr(const vector<int>& regs, int size,
-            SubProcessor<T>& proc)
-    {
-        trunc_pr(regs, size, proc, T::clear::characteristic_two);
-    }
-
     template<int = 0>
     void trunc_pr(const vector<int>&, int, SubProcessor<T>&, true_type)
     {
@@ -49,7 +43,7 @@ public:
                     "only implemented for two players");
 
         assert(regs.size() % 4 == 0);
-        this->trunc_pr_counter += size * regs.size() / 4;
+        this->trunc_pr_big_counter += size * regs.size() / 4;
         typedef typename T::open_type open_type;
 
         vector<TruncPrTupleWithGap<open_type>> infos;
@@ -75,13 +69,13 @@ public:
             }
             if (this->P.my_num())
                 for (int i = 0; i < size; i++)
-                    proc.get_S_ref(info.dest_base + i) = -open_type(
-                            -open_type(proc.get_S()[info.source_base + i])
-                                    >> info.m);
+                    proc.get_S_ref(info.dest_base + i) =
+                            proc.get_S()[info.source_base + i].signed_rshift(
+                                    info.m);
             else
                 for (int i = 0; i < size; i++)
                     proc.get_S_ref(info.dest_base + i) =
-                            proc.get_S()[info.source_base + i] >> info.m;
+                            proc.get_S()[info.source_base + i].signed_rshift(info.m);
         }
     }
 

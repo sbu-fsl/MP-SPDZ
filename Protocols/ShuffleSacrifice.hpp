@@ -9,6 +9,7 @@
 #include "ShuffleSacrifice.h"
 #include "BufferScope.h"
 #include "Tools/PointerVector.h"
+#include "Tools/CodeLocations.h"
 #include "GC/BitAdder.h"
 
 #include "LimitedPrep.hpp"
@@ -48,6 +49,7 @@ void TripleShuffleSacrifice<T>::triple_combine(vector<array<T, 3> >& triples,
         vector<array<T, 3> >& to_combine, Player& P,
         typename T::MAC_Check& MC)
 {
+    CODE_LOCATION
     int buffer_size = to_combine.size();
     int N = buffer_size / B;
     assert(minimum_n_outputs() <= N);
@@ -90,6 +92,7 @@ void DabitShuffleSacrifice<T>::dabit_sacrifice(vector<dabit<T> >& output,
         vector<dabit<T> >& to_check, SubProcessor<T>& proc,
         ThreadQueues* queues)
 {
+    CODE_LOCATION
 #ifdef VERBOSE_DABIT
     cerr << "Sacrificing daBits" << endl;
 #endif
@@ -188,6 +191,7 @@ void EdabitShuffleSacrifice<T>::edabit_sacrifice(vector<edabit<T> >& output,
         SubProcessor<T>& proc, bool strict, int player,
         ThreadQueues* queues)
 {
+    CODE_LOCATION
     Timer timer;
     bool verbose = OnlineOptions::singleton.has_option("verbose_eda");
 

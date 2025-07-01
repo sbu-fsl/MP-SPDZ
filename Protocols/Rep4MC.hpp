@@ -11,6 +11,7 @@
 template<class T>
 void Rep4MC<T>::exchange(const Player& P)
 {
+    CODE_LOCATION
     octetStream right, tmp;
     for (auto& secret : this->secrets)
     {
@@ -38,6 +39,7 @@ void Rep4MC<T>::Check(const Player& P)
     if (check_hash.size == 0)
         return;
 
+    CODE_LOCATION
     octetStream left;
     check_hash.final(left);
     P.pass_around(left, -1);

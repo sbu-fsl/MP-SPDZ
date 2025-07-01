@@ -55,6 +55,7 @@ void Beaver<T>::prepare_mul(const T& x, const T& y, int n)
 template<class T>
 void Beaver<T>::exchange()
 {
+    CODE_LOCATION
     assert(shares.size() == 2 * lengths.size());
     MC->init_open(P, shares.size());
     for (size_t i = 0; i < shares.size(); i++)

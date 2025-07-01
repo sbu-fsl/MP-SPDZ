@@ -112,6 +112,10 @@ void Sub_Data_Files<T>::check_setup(const Names& N)
 template<class T>
 void Sub_Data_Files<T>::check_setup(int num_players, const string& prep_dir)
 {
+  if (T::function_dependent)
+    throw runtime_error("preprocessing from file not implemented "
+        "for function-dependent preprocessing");
+
   try
     {
       T::clear::check_setup(prep_dir);

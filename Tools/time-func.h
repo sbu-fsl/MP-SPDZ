@@ -19,11 +19,13 @@ class Timer
   public:
   Timer(clockid_t clock_id = CLOCK_MONOTONIC) : running(false), elapsed_time(0), clock_id(clock_id)
       { clock_gettime(clock_id, &startv); }
+  Timer(double time) : Timer()
+      { elapsed_time = time * 1e9; }
   Timer& start();
   void stop();
   void reset();
 
-  double elapsed();
+  double elapsed() const;
   double elapsed_then_reset();
   double idle();
 
@@ -34,6 +36,8 @@ class Timer
   Timer& operator+=(const TimeScope& other);
 
   Timer operator+(const Timer& other) const;
+
+  bool operator<(const Timer& other) const;
 
   private:
   timespec startv;

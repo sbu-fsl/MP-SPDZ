@@ -11,8 +11,35 @@
 using namespace std;
 
 #include "OnlineOptions.h"
+#include "GC/ArgTuples.h"
+
+template<class T> class StackedVector;
 
 void trunc_pr_check(int k, int m, int n_bits);
+
+template<class T>
+class Range
+{
+    typename T::iterator begin_, end_;
+
+public:
+    Range(T& whole, size_t start, size_t length)
+    {
+        begin_ = whole.begin() + start;
+        end_ = begin_ + length;
+        assert(end_ <= whole.end());
+    }
+
+    typename T::iterator begin()
+    {
+        return begin_;
+    }
+
+    typename T::iterator end()
+    {
+        return end_;
+    }
+};
 
 template<class T>
 class TruncPrTuple
@@ -46,19 +73,30 @@ public:
 
     T upper(T mask)
     {
-        return (mask << (n_shift + 1)) >> (n_shift + m + 1);
+        return (mask.cheap_lshift(n_shift + 1)) >> (n_shift + m + 1);
     }
 
     T msb(T mask)
     {
-        return (mask << (n_shift)) >> (T::N_BITS - 1);
+        return (mask.cheap_lshift(n_shift)) >> (T::N_BITS - 1);
     }
 
+    T add_before()
+    {
+        return T(1).cheap_lshift(k - 1);
+    }
+
+    T subtract_after()
+    {
+        return T(1).cheap_lshift(k - m - 1);
+    }
 };
 
 template<class T>
 class TruncPrTupleWithGap : public TruncPrTuple<T>
 {
+    bool big_gap_;
+
 public:
     TruncPrTupleWithGap(const vector<int>& regs, size_t base) :
             TruncPrTupleWithGap<T>(regs.begin() + base)
@@ -68,6 +106,7 @@ public:
     TruncPrTupleWithGap(vector<int>::const_iterator it) :
             TruncPrTuple<T>(it)
     {
+        big_gap_ = this->k <= T::n_bits() - OnlineOptions::singleton.trunc_error;
         if (T::prime_field and small_gap())
             throw runtime_error("domain too small for chosen truncation error");
     }
@@ -75,7 +114,7 @@ public:
     T upper(T mask)
     {
         if (big_gap())
-            return mask >> this->m;
+            return mask.signed_rshift(this->m);
         else
             return TruncPrTuple<T>::upper(mask);
     }
@@ -88,12 +127,86 @@ public:
 
     bool big_gap()
     {
-        return this->k <= T::n_bits() - OnlineOptions::singleton.trunc_error;
+        return big_gap_;
     }
 
     bool small_gap()
     {
         return not big_gap();
+    }
+};
+
+template<class T>
+class TruncPrTupleWithRange : public TruncPrTupleWithGap<typename T::open_type>
+{
+    typedef TruncPrTupleWithGap<typename T::open_type> super;
+
+public:
+    Range<StackedVector<T>> source_range, dest_range;
+
+    TruncPrTupleWithRange(super info, StackedVector<T>& S, size_t size) :
+            super(info), source_range(S, info.source_base, size),
+            dest_range(S, info.dest_base, size)
+    {
+    }
+
+    template<class U>
+    U correction_shift(U bit)
+    {
+        return bit.cheap_lshift(T::open_type::N_BITS - this->m);
+    }
+};
+
+template<class T>
+class TruncPrTupleList : public vector<TruncPrTupleWithRange<T>>
+{
+    typedef TruncPrTupleWithGap<T> part_type;
+    typedef TruncPrTupleList This;
+
+public:
+    TruncPrTupleList(const vector<int>& args, StackedVector<T>& S, size_t size)
+    {
+        ArgList<TruncPrTupleWithGap<typename T::open_type>> tmp(args);
+        for (auto x : tmp)
+            this->push_back(TruncPrTupleWithRange<T>(x, S, size));
+    }
+
+    TruncPrTupleList()
+    {
+    }
+
+    bool have_big_gap()
+    {
+        for (auto info : *this)
+            if (info.big_gap())
+                return true;
+        return false;
+    }
+
+    bool have_small_gap()
+    {
+        for (auto info : *this)
+            if (info.small_gap())
+                return true;
+        return false;
+    }
+
+    This get_big_gap()
+    {
+        This res;
+        for (auto info : *this)
+            if (info.big_gap())
+                res.push_back(info);
+        return res;
+    }
+
+    This get_small_gap()
+    {
+        This res;
+        for (auto info : *this)
+            if (info.small_gap())
+                res.push_back(info);
+        return res;
     }
 };
 

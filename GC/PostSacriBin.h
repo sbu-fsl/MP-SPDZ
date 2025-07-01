@@ -44,6 +44,11 @@ public:
     T finalize_mul(int n = -1);
 
     void check();
+
+    T get_random()
+    {
+        return ReplicatedBase::get_random<typename T::clear>();
+    }
 };
 
 } /* namespace GC */

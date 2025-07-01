@@ -15,7 +15,13 @@ template<class T>
 class SemiRep3Prep : public virtual SemiHonestRingPrep<T>,
         public virtual ReplicatedRingPrep<T>
 {
+    typedef typename T::bit_type BT;
+
+    vector<BT> b;
+
     void buffer_dabits(ThreadQueues*);
+    template<int MY_NUM>
+    void buffer_dabits_finish();
 
 public:
     static bool bits_from_dabits() { return true; }

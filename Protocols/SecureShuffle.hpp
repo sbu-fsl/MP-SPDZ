@@ -8,6 +8,7 @@
 
 #include "SecureShuffle.h"
 #include "Tools/Waksman.h"
+#include "Tools/CodeLocations.h"
 
 #include <math.h>
 #include <algorithm>
@@ -87,6 +88,7 @@ void SecureShuffle<T>::apply_multiple(StackedVector<T>& a, vector<size_t>& sizes
 template<class T>
 void SecureShuffle<T>::apply_multiple(StackedVector<T> &a, vector<size_t> &sizes, vector<size_t> &destinations,
     vector<size_t> &sources, vector<size_t> &unit_sizes, vector<shuffle_type> &shuffles, vector<bool> &reverse) {
+    CODE_LOCATION
     const auto n_shuffles = sizes.size();
     assert(sources.size() == n_shuffles);
     assert(destinations.size() == n_shuffles);
@@ -121,6 +123,7 @@ void SecureShuffle<T>::apply_multiple(StackedVector<T> &a, vector<size_t> &sizes
 template<class T>
 void SecureShuffle<T>::inverse_permutation(StackedVector<T> &stack, size_t n, size_t output_base,
                                            size_t input_base) {
+    CODE_LOCATION
     int alice = 0;
     int bob = 1;
 
@@ -338,7 +341,7 @@ int SecureShuffle<T>::generate(int n_shuffle, store_type& store)
 
     for (auto i: proc.protocol.get_relevant_players()) {
         vector<int> perm;
-        if (proc.P.my_num() == i)
+        if (proc.input.is_me(i))
             perm = generate_random_permutation(n_shuffle);
         auto config = configure(i, &perm, n_shuffle);
         shuffle.push_back(config);
@@ -349,6 +352,7 @@ int SecureShuffle<T>::generate(int n_shuffle, store_type& store)
 
 template<class T>
 vector<vector<T>> SecureShuffle<T>::configure(int config_player, vector<int> *perm, int n) {
+    CODE_LOCATION
     auto &P = proc.P;
     auto &input = proc.input;
     input.reset_all(P);
@@ -357,7 +361,7 @@ vector<vector<T>> SecureShuffle<T>::configure(int config_player, vector<int> *pe
 
     // The player specified by config_player configures the shared waksman network
     // using its personal permutation
-    if (P.my_num() == config_player) {
+    if (input.is_me(config_player)) {
         auto config_bits = waksman.configure(*perm);
         for (size_t i = 0; i < config_bits.size(); i++) {
             auto &x = config_bits[i];

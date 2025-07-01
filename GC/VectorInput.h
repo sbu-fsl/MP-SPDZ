@@ -18,7 +18,8 @@ class VectorInput : public InputBase<T>
     deque<int> input_lengths;
 
 public:
-    VectorInput(typename T::MAC_Check& MC, Preprocessing<T>& prep, Player& P) :
+    VectorInput(typename T::MAC_Check& MC, Preprocessing<T>& prep, Player& P,
+            typename T::Protocol* = 0) :
             part_input(MC.get_part_MC(), prep.get_part(), P)
     {
         part_input.reset_all(P);

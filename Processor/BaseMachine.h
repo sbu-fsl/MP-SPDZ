@@ -22,10 +22,14 @@ void print_usage(ostream& o, const char* name, size_t capacity);
 
 class BaseMachine
 {
+    friend class Program;
+
 protected:
     static BaseMachine* singleton;
 
     static thread_local OnDemandOTTripleSetup ot_setup;
+
+    static thread_local const Program* program;
 
     std::map<int,TimerWithComm> timer;
 
@@ -33,11 +37,14 @@ protected:
     string domain;
     string relevant_opts;
     string security;
+    string gf2n;
 
     virtual size_t load_program(const string& threadname,
             const string& filename);
 
     static BaseMachine get_basics(string progname);
+
+    static DataPositions get_offline_data_used();
 
 public:
     static thread_local int thread_num;
@@ -52,6 +59,8 @@ public:
 
     vector<Program> progs;
 
+    bool nan_warning;
+
     static BaseMachine& s();
     static bool has_singleton() { return singleton != 0; }
     static bool has_program();
@@ -61,6 +70,7 @@ public:
     static string get_domain(string progname);
     static int ring_size_from_schedule(string progname);
     static int prime_length_from_schedule(string progname);
+    static int gf2n_length_from_schedule(string progname);
     static bigint prime_from_schedule(string progname);
     static int security_from_schedule(string progname);
 
@@ -127,7 +137,7 @@ int BaseMachine::batch_size(Dtype type, int buffer_size, int fallback)
 
     if (buffer_size <= 0 and has_program())
     {
-        auto files = s().progs[0].get_offline_data_used().files;
+        auto files = get_offline_data_used().files;
         auto usage = files[T::clear::field_type()];
 
         if (type == DATA_DABIT and T::LivePrep::bits_from_dabits())
@@ -187,7 +197,7 @@ int BaseMachine::input_batch_size(int player, int buffer_size)
     if (has_program())
     {
         auto res =
-                s().progs[0].get_offline_data_used(
+                get_offline_data_used(
                         ).inputs[player][T::clear::field_type()];
         if (res > 0)
             return res;
@@ -210,7 +220,7 @@ int BaseMachine::edabit_batch_size(int n_bits, int buffer_size)
 
     if (has_program())
     {
-        n = s().progs[0].get_offline_data_used().total_edabits(n_bits);
+        n = get_offline_data_used().total_edabits(n_bits);
     }
 
     if (n > 0 and not (buffer_size > 0))

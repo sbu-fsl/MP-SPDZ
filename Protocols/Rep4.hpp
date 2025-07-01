@@ -6,6 +6,7 @@
 #include "Rep4.h"
 #include "GC/square64.h"
 #include "Processor/TruncPrTuple.h"
+#include "Tools/CodeLocations.h"
 
 template<class T>
 Rep4<T>::Rep4(Player& P) :
@@ -245,6 +246,7 @@ void Rep4<T>::next_dotprod()
 template<class T>
 void Rep4<T>::exchange()
 {
+    CODE_LOCATION
     auto& a = add_shares;
     results.clear();
     results.resize(a[4].size());
@@ -296,6 +298,7 @@ T Rep4<T>::finalize_dotprod(int)
 template<class T>
 void Rep4<T>::must_check()
 {
+    CODE_LOCATION
     octetStreams to_send(P);
     for (int i = 1; i < 4; i++)
         for (int j = 0; j < 4; j++)
@@ -333,13 +336,6 @@ void Rep4<T>::randoms(T& res, int n_bits)
 }
 
 template<class T>
-void Rep4<T>::trunc_pr(const vector<int>& regs, int size,
-        SubProcessor<T>& proc)
-{
-    trunc_pr<0>(regs, size, proc, T::clear::characteristic_two);
-}
-
-template<class T>
 template<int>
 void Rep4<T>::trunc_pr(const vector<int>&, int, SubProcessor<T>&, true_type)
 {
@@ -351,6 +347,7 @@ template<int>
 void Rep4<T>::trunc_pr(const vector<int>& regs, int size,
 		SubProcessor<T>& proc, false_type)
 {
+    CODE_LOCATION
     assert(regs.size() % 4 == 0);
     this->trunc_pr_counter += size * regs.size() / 4;
     typedef typename T::open_type open_type;
@@ -373,7 +370,12 @@ void Rep4<T>::trunc_pr(const vector<int>& regs, int size,
     for (auto& info : infos)
     {
         for (int j = 0; j < size; j++)
-            cs.push_back(proc.get_S_ref(info.source_base + j) + rs.next());
+        {
+            auto c = proc.get_S_ref(info.source_base + j) + rs.next();
+            if (info.small_gap())
+                c += T::constant(info.add_before(), my_num);
+            cs.push_back(c);
+        }
     }
 
     octetStream c_os;
@@ -471,7 +473,8 @@ void Rep4<T>::trunc_pr(const vector<int>& regs, int size,
                 auto b = gen_results.next().res + eval_results.next().res
                         - 2 * finalize_mul();
                 proc.get_S_ref(info.dest_base + j) = eval_results.next().res
-                        - gen_results.next().res + (b << (info.k - info.m));
+                        - gen_results.next().res + (b << (info.k - info.m))
+                        - T::constant(info.subtract_after(), P.my_num());
             }
         }
 }
@@ -481,6 +484,7 @@ template<class U>
 void Rep4<T>::split(StackedVector<T>& dest, const vector<int>& regs, int n_bits,
         const U* source, int n_inputs)
 {
+    CODE_LOCATION
     assert(regs.size() / n_bits == 2);
     assert(n_bits <= 64);
     int unit = GC::Clear::N_BITS;

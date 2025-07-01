@@ -30,7 +30,7 @@ set. Consider the example of :py:class:`~Compiler.instructions.prefixsums`::
 
 :py:obj:`opcode` is set from :py:obj:`opcodes` in
 :download:`../Compiler/instructions_base.py`. This is simply for
-convenience as it allow copying from the C++ code (see below). The
+convenience as it allows copying from the C++ code (see below). The
 only requirement for opcodes is that they are unique 10-bit integers.
 
 :py:obj:`arg_format` has to be iterable over strings indicating the

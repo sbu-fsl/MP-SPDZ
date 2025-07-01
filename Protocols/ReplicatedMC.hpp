@@ -40,6 +40,7 @@ void ReplicatedMC<T>::prepare(const vector<T>& S)
 template<class T>
 void ReplicatedMC<T>::exchange(const Player& P)
 {
+    CODE_LOCATION
     prepare(this->secrets);
     P.pass_around(to_send, o, -1);
 }

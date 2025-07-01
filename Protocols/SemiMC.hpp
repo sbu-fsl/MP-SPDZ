@@ -48,6 +48,7 @@ void DirectSemiMC<T>::POpen_(vector<typename T::open_type>& values,
 template<class T>
 void DirectSemiMC<T>::exchange_(const PlayerBase& P)
 {
+    CODE_LOCATION
     Bundle<octetStream> oss(P);
     oss.mine.reserve(this->values.size());
     assert(this->values.size() == this->lengths.size());

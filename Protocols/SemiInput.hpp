@@ -18,9 +18,10 @@ SemiInput<T>::SemiInput(SubProcessor<T>* proc, PlayerBase& P) :
 }
 
 template<class T>
-PairwiseKeyInput<T>::PairwiseKeyInput(SubProcessor<T>* proc, PlayerBase&) :
+PairwiseKeyInput<T>::PairwiseKeyInput(SubProcessor<T>* proc, PlayerBase& P) :
         PrepLessInput<T>(proc)
 {
+    maybe_init(P);
 }
 
 template<class T>
@@ -72,6 +73,7 @@ void SemiInput<T>::add_other(int, int)
 template<class T>
 void SemiInput<T>::exchange()
 {
+    this->shares.reset();
 }
 
 template<class T>
@@ -79,12 +81,6 @@ void SemiInput<T>::finalize_other(int player, T& target, octetStream&,
         int)
 {
     target = this->recv_prngs.at(player).template get<T>();
-}
-
-template<class T>
-T SemiInput<T>::finalize_mine()
-{
-    return this->shares.next();
 }
 
 #endif

@@ -73,13 +73,24 @@ int limb_size<int>()
   return 0;
 }
 
-bigint::bigint(const Integer& x) : bigint(SignedZ2<64>(x))
+bigint::bigint(const Integer& x)
 {
+  *this = x;
 }
 
-
-bigint::bigint(const GC::Clear& x) : bigint(SignedZ2<64>(x))
+bigint::bigint(const GC::Clear& x)
 {
+  *this = x;
+}
+
+bigint& bigint::operator =(const Integer& x)
+{
+  return *this = SignedZ2<64>(x);
+}
+
+bigint& bigint::operator =(const GC::Clear& x)
+{
+  return *this = SignedZ2<64>(x);
 }
 
 bigint::bigint(const mp_limb_t* data, size_t n_limbs)

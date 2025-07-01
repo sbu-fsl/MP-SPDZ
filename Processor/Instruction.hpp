@@ -37,6 +37,9 @@ void BaseInstruction::parse(istream& s, int inst_pos)
   size = code >> 10;
   opcode = 0x3FF & code;
   
+  if (s.fail())
+    throw bytecode_error("cannot read opcode");
+
   if (size==0)
     size=1;
 
@@ -141,6 +144,7 @@ void BaseInstruction::parse_operands(istream& s, int pos, int file_pos)
       case PRINTREGPLAIN:
       case PRINTREGPLAINB:
       case PRINTREGPLAINS:
+      case PRINTREGPLAINSB:
       case LDTN:
       case LDARG:
       case STARG:
@@ -187,7 +191,6 @@ void BaseInstruction::parse_operands(istream& s, int pos, int file_pos)
       case SHLCBI:
       case SHRCBI:
       case NOTC:
-      case CONVMODP:
       case GADDCI:
       case GADDSI:
       case GSUBCI:
@@ -212,6 +215,7 @@ void BaseInstruction::parse_operands(istream& s, int pos, int file_pos)
         n = get_int(s);
         break;
       case PICKS:
+      case CONVMODP:
         get_ints(r, s, 3);
         n = get_int(s);
         break;
@@ -320,8 +324,10 @@ void BaseInstruction::parse_operands(istream& s, int pos, int file_pos)
       case RUN_TAPE:
       case CONV2DS:
       case MATMULS:
+      case GMATMULS:
       case APPLYSHUFFLE:
       case MATMULSM:
+      case GMATMULSM:
         num_var_args = get_int(s);
         get_vector(num_var_args, start, s);
         break;
@@ -400,6 +406,7 @@ void BaseInstruction::parse_operands(istream& s, int pos, int file_pos)
       case WRITEFILESHARE:
       case GWRITEFILESHARE:
       case CONCATS:
+      case UNSPLIT:
           num_var_args = get_int(s) - 1;
           r[0] = get_int(s);
           get_vector(num_var_args, start, s);
@@ -729,7 +736,7 @@ unsigned BaseInstruction::get_max_reg(int reg_type) const
       int res = 0;
       for (auto it = start.begin(); it < start.end(); it += *it)
       {
-          assert(it + *it <= start.end());
+          bytecode_assert(it + *it <= start.end());
           res = max(res, it[1] + it[2]);
       }
       return res;
@@ -746,7 +753,7 @@ unsigned BaseInstruction::get_max_reg(int reg_type) const
       auto it = start.begin();
       while (it != start.end())
       {
-          assert(it < start.end());
+          bytecode_assert(it < start.end());
           int n = *it;
           res = max(res, *++it + size);
           it += n - 1;
@@ -754,6 +761,7 @@ unsigned BaseInstruction::get_max_reg(int reg_type) const
       return res;
   }
   case MATMULS:
+  case GMATMULS:
   {
       int res = 0;
       for (auto it = start.begin(); it < start.end(); it += 6)
@@ -764,6 +772,7 @@ unsigned BaseInstruction::get_max_reg(int reg_type) const
       return res;
   }
   case MATMULSM:
+  case GMATMULSM:
   {
       int res = 0;
       for (auto it = start.begin(); it < start.end(); it += 12)
@@ -866,7 +875,7 @@ unsigned BaseInstruction::get_max_reg(int reg_type) const
           int n = *it - n_prefix;
           size = max((long long) size, DIV_CEIL(*(it + 1), 64));
           it += n_prefix;
-          assert(it + n <= start.end());
+          bytecode_assert(it + n <= start.end());
           for (int i = 0; i < n; i++)
               res = max(res, *it++ + size);
       }
@@ -958,7 +967,8 @@ inline void Instruction::execute(Processor<sint, sgf2n>& Proc) const
                 "integer registers only have 64 bits");
           values.push_back(tmp);
       }
-      sync<sint>(values, Proc.P);
+      if (r[2])
+          Procp.protocol.sync(values, Proc.P);
       for (int i = 0; i < size; i++)
           Proc.write_Ci(r[0] + i, values[i].get());
       return;
@@ -987,8 +997,8 @@ inline void Instruction::execute(Processor<sint, sgf2n>& Proc) const
           for (auto j = start.begin(); j < start.end(); j += 2)
             {
               auto source = S.begin() + *(j + 1);
-              assert(dest + *j <= S.end());
-              assert(source + *j <= S.end());
+              bytecode_assert(dest + *j <= S.end());
+              bytecode_assert(source + *j <= S.end());
               for (int k = 0; k < *j; k++)
                 *dest++ = *source++;
             }
@@ -1165,14 +1175,21 @@ inline void Instruction::execute(Processor<sint, sgf2n>& Proc) const
       case MATMULS:
         Proc.Procp.matmuls(Proc.Procp.get_S(), *this);
         return;
+      case GMATMULS:
+        Proc.Proc2.matmuls(Proc.Proc2.get_S(), *this);
+        return;
       case MATMULSM:
         Proc.Procp.protocol.matmulsm(Proc.Procp, Proc.machine.Mp.MS, *this);
+        return;
+      case GMATMULSM:
+        Proc.Proc2.protocol.matmulsm(Proc.Proc2, Proc.machine.M2.MS, *this);
         return;
       case CONV2DS:
         Proc.Procp.protocol.conv2ds(Proc.Procp, *this);
         return;
       case TRUNC_PR:
-        Proc.Procp.protocol.trunc_pr(start, size, Proc.Procp);
+        Proc.Procp.protocol.trunc_pr(start, size, Proc.Procp,
+            sint::clear::characteristic_two);
         return;
       case SECSHUFFLE:
         Proc.Procp.secure_shuffle(*this);
@@ -1424,11 +1441,13 @@ inline void Instruction::execute(Processor<sint, sgf2n>& Proc) const
         Procp.protocol.cisc(Procp, *this);
         return;
       default:
-        printf("Case of opcode=0x%x not implemented yet\n",opcode);
         throw invalid_opcode(opcode);
         break;
 #define X(NAME, CODE) case NAME:
         COMBI_INSTRUCTIONS
+#undef X
+#define X(NAME, CODE) case NAME: throw no_dynamic_memory();
+        DYNAMIC_INSTRUCTIONS
 #undef X
 #define X(NAME, PRE, CODE) case NAME:
         ARITHMETIC_INSTRUCTIONS
@@ -1482,6 +1501,8 @@ void Program::execute_with_errors(Processor<sint, sgf2n>& Proc) const
   auto& processor = Proc.Procb;
   auto& Ci = Proc.get_Ci();
 
+  BaseMachine::program = this;
+
   while (Proc.PC<size)
     {
       Proc.last_PC = Proc.PC;
@@ -1533,6 +1554,15 @@ void Program::execute_with_errors(Processor<sint, sgf2n>& Proc) const
       Proc.stats[p[PC].get_opcode()] += timer.elapsed() * 1e9;
 #endif
     }
+}
+
+template<class T>
+void Program::mulm_check() const
+{
+  if (T::function_dependent and not OnlineOptions::singleton.has_option("allow_mulm"))
+    throw runtime_error("Mixed multiplication not implemented for function-dependent preprocessing. "
+        "Use '-E <protocol>' during compilation or state "
+            "'program.use_mulm = False' at the beginning of your high-level program.");
 }
 
 template<class T>

@@ -61,13 +61,6 @@ test(sbits.new(5, n=3) ^ sbits.new(3, n=4), 6)
 test(sbits.new(13, n=4) ^ sbits.new(3, n=3), 14)
 test(sbits.new(5, n=3) ^ sbits.new(11, n=4), 14)
 
-b = sbits.get_random_bit()
-test(b * (1 - b), 0)
-bits = [sbits.get_random_bit() for i in range(40)]
-print_ln('random: %s', sbits.bit_compose(bits).reveal())
-r = sbits.bit_compose(bits)
-test(r * sbit(1) + sbit(1) * r, 0)
-
 test(sbits.get_type(64)(2**64 - 1).popcnt(), 64)
 
 a = [sbits.new(x, 2) for x in range(4)]

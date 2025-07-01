@@ -86,7 +86,7 @@ inline void mpn_add_fixed_n<4>(mp_limb_t* res, const mp_limb_t* x, const mp_limb
 }
 #endif
 
-#ifdef __clang__
+#if defined(__clang__) or __GNUC__ >= 14
 inline char clang_add_carry(char carryin, unsigned long x, unsigned long y, unsigned long& res)
 {
 	unsigned long carryout;
@@ -99,7 +99,7 @@ inline mp_limb_t mpn_add_n_with_carry(mp_limb_t* res, const mp_limb_t* x, const 
 {
     // This is complicated because we want to use adc(x) whenever possible.
     // clang always offers this but GCC only with ADX enabled.
-#if defined(__ADX__) || defined(__clang__)
+#if defined(__ADX__) || defined(__clang__) || __GNUC__ >= 14
     if (cpu_has_adx())
     {
         char carry = 0;

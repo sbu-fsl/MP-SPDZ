@@ -23,7 +23,7 @@ template<class T> class BitVec_;
  * The interface replicates ``gfp_``.
  */
 template<int X, int L>
-class gfpvar_
+class gfpvar_ : public ValueInterface
 {
     typedef modp_<L> modp_type;
 

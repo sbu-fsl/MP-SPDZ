@@ -1,5 +1,20 @@
 The changelog explains changes pulled through from the private development repository. Bug fixes and small enhancements are committed between releases and not documented here.
 
+## 0.4.1 (May 30, 2025)
+
+- Add protocols with function-dependent preprocessing (https://eprint.iacr.org/2025/919)
+- Parallelize shuffling (@vincent-ehrmanntraut)
+- More efficient probabilistic truncation in Rep3
+- More efficient binary to arithmetic conversion for one bit in Rep3
+- Backend optimizations benefitting the most efficient protocols like Rep3
+- Allow regint registers as argument in exported functions
+- More efficient dot product for GF(2^n)
+- File persistance for GF(2^n)
+- Output of binary secrets
+- SHA256
+- Improved navigation by providing links to relevant papers (`./compile.py --papers`) and outputting which code is executed (`./<protocol>-party.x --code-locations`)
+- Fixed security bug: remove MAC key in case of failure
+
 ## 0.4.0 (November 21, 2024)
 
 - Functionality to call high-level code from C++

@@ -54,6 +54,8 @@ public:
 
     static const bool randoms_for_opens = false;
 
+    static const bool function_dependent = false;
+
     static const int bit_generation_threshold = 0;
 
     static const int default_length = 1;

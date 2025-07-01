@@ -72,6 +72,8 @@ public:
     static const true_type invertible;
     static const true_type characteristic_two;
 
+    static const bool garbled = false;
+
     static int threshold(int) { return 0; }
 
     static MC* new_mc(mac_key_type key) { return new MC(key); }

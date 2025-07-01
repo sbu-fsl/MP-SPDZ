@@ -52,6 +52,18 @@ public:
         this->first.output(out, human);
         this->second.output(out, human);
     }
+
+    void pack(octetStream& os) const
+    {
+        this->first.pack(os);
+        this->second.pack(os);
+    }
+
+    void unpack(octetStream& os)
+    {
+        this->first.unpack(os);
+        this->second.unpack(os);
+    }
 };
 
 #endif /* PROTOCOLS_DABIT_H_ */

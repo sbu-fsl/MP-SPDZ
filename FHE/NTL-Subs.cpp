@@ -10,6 +10,7 @@
 #include "FHE/NoiseBounds.h"
 
 #include "Tools/mkpath.h"
+#include "Tools/CodeLocations.h"
 
 #include "FHEOffline/Proof.h"
 
@@ -51,6 +52,7 @@ template <>
 int generate_semi_setup(int plaintext_length, int sec,
     FHE_Params& params, FFT_Data& FTD, bool round_up, int n)
 {
+  CODE_LOCATION
   int m = 1024;
   int lgp = plaintext_length;
   bigint p;
@@ -93,6 +95,8 @@ template <>
 int generate_semi_setup(int plaintext_length, int sec,
     FHE_Params& params, P2Data& P2D, bool round_up, int n)
 {
+  CODE_LOCATION
+
   if (params.n_mults() > 0)
     throw runtime_error("only implemented for 0-level BGV");
   gf2n_short::init_field(plaintext_length);
@@ -301,6 +305,8 @@ void generate_modulus(bigint& pr, const int m, const bigint p, const int lg2pr,
 template <>
 void Parameters::SPDZ_Data_Setup(FHE_Params& params, FFT_Data& FTD)
 {
+  CODE_LOCATION
+
   bigint p;
   int idx, m;
   SPDZ_Data_Setup_Primes(p, plaintext_length, idx, m);
@@ -672,6 +678,8 @@ void char_2_dimension(int& m, int& lg2)
 template <>
 void Parameters::SPDZ_Data_Setup(FHE_Params& params, P2Data& P2D)
 {
+  CODE_LOCATION
+
   int n = n_parties;
   int lg2 = plaintext_length;
 

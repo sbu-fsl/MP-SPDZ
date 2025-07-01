@@ -193,7 +193,12 @@ class closed_connection : public exception
 {
     const char* what() const throw()
     {
-        return "connection closed down";
+        return "Connection closed down. "
+            "This is most likely due to a problem on the other side. "
+            "If there's no error message on the other side, it might be "
+            "due to a lack of memory. See "
+            "https://mp-spdz.readthedocs.io/en/latest/troubleshooting.html#crash-without-error-message-killed-or-bad-alloc "
+            "for possible remedies.";
     }
 };
 
@@ -267,7 +272,7 @@ public:
 class signature_mismatch : public runtime_error
 {
 public:
-    signature_mismatch(const string& filename);
+    signature_mismatch(const string& filename, bool has_mac = false);
 };
 
 class insufficient_memory : public runtime_error
@@ -313,5 +318,17 @@ public:
 };
 
 typedef bytecode_error Invalid_Instruction;
+
+class no_dynamic_memory : public runtime_error
+{
+public:
+    no_dynamic_memory();
+};
+
+class field_too_small : public runtime_error
+{
+public:
+    field_too_small(int length, int security);
+};
 
 #endif

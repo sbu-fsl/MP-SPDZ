@@ -32,24 +32,26 @@ int main(int argc, const char** argv)
 
 #ifdef ROUND_NEAREST_IN_EMULATION
     cerr << "Using nearest rounding instead of probabilistic truncation" << endl;
-#else
-    online_opts.set_trunc_error(opt);
 #endif
 
     int R = ring_opts.ring_size_from_opts_or_schedule(progname);
-    switch (R)
-    {
+
 #define X(L) \
-    case L: \
-        Machine<FakeShare<SignedZ2<L>>, FakeShare<gf2n>>(N, false, online_opts, \
-                gf2n::default_degree()).run(progname); \
-        break;
-    X(64) X(128) X(256) X(192) X(384) X(512)
+    if (L == R) \
+    { \
+        Machine<FakeShare<SignedZ2<L>>, FakeShare<gf2n>>( \
+                N, false, online_opts).run(progname); \
+        return 0; \
+    }
+
+    X(64)
+#ifndef FEWER_RINGS
+    X(128) X(256) X(192) X(384) X(512)
+#endif
 #ifdef RING_SIZE
     X(RING_SIZE)
 #endif
 #undef X
-    default:
-        cerr << "Not compiled for " << R << "-bit rings" << endl;
-    }
+    cerr << "Not compiled for " << R << "-bit rings" << endl;
+    return 1;
 }

@@ -122,6 +122,20 @@ public:
     {
         return array<T, L>::at(i);
     }
+
+    void pack(octetStream& os) const
+    {
+        os.store(used_size);
+        for (auto& x : *this)
+            x.pack(os);
+    }
+
+    void unpack(octetStream& os)
+    {
+        os.get(used_size);
+        for (auto& x : *this)
+            x.unpack(os);
+    }
 };
 
 #endif /* TOOLS_FIXEDVECTOR_H_ */

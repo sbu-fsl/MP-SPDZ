@@ -53,7 +53,7 @@ public:
      * Argument with binary secret shares (always in array).
      *
      * @param n_bits number of bits
-     * @param values shares (vector of vectors of bit_type)
+     * @param values shares (vector of vectors of bit_type of length ceil(n_bits/64))
      */
     template<class T>
     FunctionArgument(size_t n_bits, vector<vector<T>>& values) :

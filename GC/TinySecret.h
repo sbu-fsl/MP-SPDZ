@@ -54,6 +54,7 @@ public:
     static const bool expensive_triples = T::expensive_triples;
     static const bool randoms_for_opens = false;
     static const bool symmetric = true;
+    static const bool function_dependent = T::function_dependent;
 
     static const int default_length = 64;
 

@@ -18,37 +18,41 @@
 void octetStream::reset()
 {
     data = 0;
-    len = mxlen = ptr = 0;
+    data_end = 0;
+    ptr = 0;
+    end = 0;
 }
 
 void octetStream::clear()
 {
     if (data)
         delete[] data;
-    data = 0;
-    len = mxlen = ptr = 0;
+    reset();
 }
 
 void octetStream::assign(const octetStream& os)
 {
-  if (os.len>=mxlen)
+  auto read = os.get_ptr();
+  if (os.get_length() >= get_max_length())
     {
       if (data)
         delete[] data;
-      mxlen=os.mxlen;  
-      data=new octet[mxlen];
+      data=new octet[os.get_max_length()];
+      set_max_length(os.get_max_length());
     }
-  len=os.len;
-  memcpy(data,os.data,len*sizeof(octet));
-  ptr=os.ptr;
+  set_length(os.get_length());
+  memcpy(data,os.data,get_length()*sizeof(octet));
+  ptr = data + read;
   bits = os.bits;
 }
 
 
 octetStream::octetStream(size_t maxlen)
 {
-  mxlen=maxlen; len=0; ptr=0;
-  data=new octet[mxlen];
+  data=new octet[maxlen];
+  ptr=data;
+  set_length(0);
+  set_max_length(maxlen);
 }
 
 octetStream::octetStream(size_t len, const octet* source) :
@@ -64,20 +68,20 @@ octetStream::octetStream(const string& other) :
 
 octetStream::octetStream(const octetStream& os)
 {
-  mxlen=os.mxlen;
-  len=os.len;
-  data=new octet[mxlen];
-  memcpy(data,os.data,len*sizeof(octet));
-  ptr=os.ptr;
+  data=new octet[os.get_max_length()];
+  set_length(os.get_length());
+  set_max_length(os.get_max_length());
+  memcpy(data,os.data,get_length()*sizeof(octet));
+  ptr = data + os.get_ptr();
   bits = os.bits;
 }
 
 octetStream::octetStream(FlexBuffer& buffer)
 {
-  mxlen = buffer.capacity();
-  len = buffer.size();
   data = (octet*)buffer.data();
-  ptr = buffer.ptr - buffer.data();
+  set_length(buffer.size());
+  set_max_length(buffer.capacity());
+  ptr = (octet*)buffer.ptr;
   buffer.reset();
 }
 
@@ -91,8 +95,9 @@ string octetStream::str() const
 void octetStream::hash(octetStream& output) const
 {
   output.resize(crypto_generichash_BYTES_MIN);
-  crypto_generichash(output.data, crypto_generichash_BYTES_MIN, data, len, NULL, 0);
-  output.len=crypto_generichash_BYTES_MIN;
+  crypto_generichash(output.data, crypto_generichash_BYTES_MIN, data,
+      get_length(), NULL, 0);
+  output.set_length(crypto_generichash_BYTES_MIN);
 }
 
 
@@ -107,7 +112,7 @@ octetStream octetStream::hash() const
 bigint octetStream::check_sum(int req_bytes) const
 {
   auto hash = new unsigned char[req_bytes];
-  crypto_generichash(hash, req_bytes, data, len, NULL, 0);
+  crypto_generichash(hash, req_bytes, data, get_length(), NULL, 0);
 
   bigint ans;
   bigintFromBytes(ans,hash,req_bytes);
@@ -119,8 +124,8 @@ bigint octetStream::check_sum(int req_bytes) const
 
 bool octetStream::equals(const octetStream& a) const
 {
-  if (len!=a.len) { return false; }
-  return memcmp(data, a.data, len) == 0;
+  if (get_length()!=a.get_length()) { return false; }
+  return memcmp(data, a.data, get_length()) == 0;
 }
 
 
@@ -140,7 +145,7 @@ void octetStream::append_random(size_t num)
 
 void octetStream::concat(const octetStream& os)
 {
-  memcpy(append(os.len), os.data, os.len*sizeof(octet));
+  memcpy(append(os.get_length()), os.data, os.get_length()*sizeof(octet));
 }
 
 
@@ -238,20 +243,22 @@ void octetStream::input(istream& s)
     throw IO_Error("not enough data");
   resize_min(size);
   s.read((char*)data, size);
-  len = size;
+  set_length(size);
   if (not s.good())
     throw IO_Error("not enough data");
+  reset_read_head();
 }
 
 void octetStream::output(ostream& s) const
 {
+  auto len = get_length();
   s.write((char*)&len, sizeof(len));
   s.write((char*)data, len);
 }
 
 ostream& operator<<(ostream& s,const octetStream& o)
 {
-  for (size_t i=0; i<o.len; i++)
+  for (size_t i=0; i<o.get_length(); i++)
     { int t0=o.data[i]&15;
       int t1=o.data[i]>>4;
       s << hex << t1 << t0 << dec;

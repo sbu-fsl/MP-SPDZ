@@ -20,7 +20,7 @@ int main(int argc, const char** argv)
     vector<share_type> inputs;
     for (int i = 0; i < n; i++)
     {
-        int j = (i % 2) ? i : (n - i);
+        int j = (i % 2) ? (n - i) : i;
         inputs.push_back(share_type::constant(j, my_number));
     }
 
@@ -49,7 +49,7 @@ int main(int argc, const char** argv)
         for (int i = 0; i < n; i++)
         {
             auto x = MC.finalize_open();
-            if (not i % 2 and x != i + 2)
+            if (i % 2 and x != i)
             {
                 cerr << "error at " << i << ": " << x << endl;
                 exit(1);

@@ -78,6 +78,14 @@ public:
     {
     }
 
+    NoInput(typename T::MAC_Check&, Preprocessing<T>&, Player&)
+    {
+    }
+
+    NoInput(SubProcessor<T>&)
+    {
+    }
+
     // prepare next round of inputs from specific party
     void reset(int)
     {

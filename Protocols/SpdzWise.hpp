@@ -120,6 +120,7 @@ void SpdzWise<T>::check()
     if (results.empty())
         return;
 
+    CODE_LOCATION
     internal.init_dotprod();
     coefficients.clear();
 
@@ -160,6 +161,7 @@ void SpdzWise<T>::zero_check(check_type t)
 template<class T>
 void SpdzWise<T>::buffer_random()
 {
+    CODE_LOCATION
     // proxy for initialization
     assert(mac_key != 0);
     auto batch_size = this->buffer_size;
@@ -185,6 +187,7 @@ template<class T>
 void SpdzWise<T>::randoms_inst(StackedVector<T>& S,
         const Instruction& instruction)
 {
+    CODE_LOCATION
     internal.init_mul();
     for (int i = 0; i < instruction.get_size(); i++)
     {

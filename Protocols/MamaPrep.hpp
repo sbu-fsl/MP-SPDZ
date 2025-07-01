@@ -24,6 +24,7 @@ MamaPrep<T>::MamaPrep(SubProcessor<T>* proc, DataPositions& usage) :
 template<class T>
 void MamaPrep<T>::buffer_triples()
 {
+    CODE_LOCATION
     int mac_security = T::N_MACS * T::clear::length();
     int sec = OnlineOptions::singleton.security_parameter;
 

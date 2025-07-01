@@ -41,7 +41,7 @@ double convert_ns_to_seconds(long long x)
 }
 
 
-double Timer::elapsed()
+double Timer::elapsed() const
 {
   long long res = elapsed_time;
   if (running)
@@ -100,4 +100,9 @@ Timer Timer::operator +(const Timer& other) const
   Timer res = *this;
   res += other;
   return res;
+}
+
+bool Timer::operator <(const Timer& other) const
+{
+  return elapsed() < other.elapsed();
 }

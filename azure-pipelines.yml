@@ -26,7 +26,7 @@ steps:
   - script:
       echo CXX = clang++ >> CONFIG.mine
   - script:
-      make replicated-{ring,field}-party.x rep4-ring-party.x shamir mascot-party.x sy spdz2k-party.x semi-he yao semi2k-party.x semi-party.x dealer-ring-party.x cowgear-party.x chaigear-party.x
+      make replicated-{ring,field}-party.x rep4-ring-party.x shamir mascot-party.x sy spdz2k-party.x semi-he yao semi2k-party.x semi-party.x dealer-ring-party.x cowgear-party.x chaigear-party.x fd
   - script:
       Scripts/setup-ssl.sh 4
   - script:

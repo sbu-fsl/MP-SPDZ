@@ -7,6 +7,8 @@
 
 void Program::compute_constants()
 {
+  bool debug = OnlineOptions::singleton.has_option("debug_alloc");
+
   for (int reg_type = 0; reg_type < MAX_REG_TYPE; reg_type++)
     {
       max_reg[reg_type] = 0;
@@ -18,8 +20,10 @@ void Program::compute_constants()
         unknown_usage = true;
       for (int reg_type = 0; reg_type < MAX_REG_TYPE; reg_type++)
         {
-          max_reg[reg_type] = max(max_reg[reg_type],
-              p[i].get_max_reg(reg_type));
+          auto reg = p[i].get_max_reg(reg_type);
+          if (debug and reg)
+            cerr << i << ": " << reg << endl;
+          max_reg[reg_type] = max(max_reg[reg_type], reg);
           max_mem[reg_type] = max(max_mem[reg_type],
               p[i].get_mem(RegType(reg_type)));
         }
@@ -93,7 +97,11 @@ void Program::parse(istream& s)
       {
         instr.parse(s, p.size());
       }
-      catch (bad_alloc&)
+      catch (bytecode_error&)
+      {
+        throw;
+      }
+      catch (exception&)
       {
         fail = true;
       }

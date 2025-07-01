@@ -75,9 +75,10 @@ input_error::input_error(const char* name, const string& filename,
             + to_string(input_counter);
 }
 
-signature_mismatch::signature_mismatch(const string& filename) :
-        runtime_error("Signature in " + filename + " doesn't match protocol. "
-                "Re-run preprocessing")
+signature_mismatch::signature_mismatch(const string& filename, bool has_mac) :
+        runtime_error("Signature in " + filename + " doesn't match protocol. " +
+                "Maybe re-run preprocessing"
+                        + (has_mac ? " or check for MAC mismatch" : ""))
 {
 }
 
@@ -139,5 +140,21 @@ persistence_error::persistence_error(const string& error) :
 
 bytecode_error::bytecode_error(const string& error) :
         runtime_error(error)
+{
+}
+
+no_dynamic_memory::no_dynamic_memory() :
+        runtime_error("this functionality is only implemented "
+                "for online-only BMR, see "
+                "https://github.com/data61/MP-SPDZ?tab=readme-ov-file#bmr-1")
+{
+}
+
+field_too_small::field_too_small(int length, int security) :
+        runtime_error(
+                "Field too small (" + to_string(length)
+                        + " bits) for chosen security (" + to_string(security)
+                        + "). Increase size with -lgp or "
+                        "decrease security with --security")
 {
 }

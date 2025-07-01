@@ -11,7 +11,7 @@ the ones used below into ``Programs/Circuits`` as follows::
 import math
 
 from Compiler.GC.types import *
-from Compiler.library import function_block, get_tape
+from Compiler.library import *
 from Compiler import util
 import itertools
 import struct
@@ -63,8 +63,11 @@ class Circuit:
     def run(self, *inputs):
         n = inputs[0][0].n, get_tape()
         if n not in self.functions:
-            self.functions[n] = function_block(
-                lambda *args: self.compile(*args))
+            if get_program().force_cisc_tape:
+                f = function_call_tape
+            else:
+                f = function_block
+            self.functions[n] = f(lambda *args: self.compile(*args))
             self.functions[n].name = '%s(%d)' % (self.name, inputs[0][0].n)
         flat_res = self.functions[n](*itertools.chain(*inputs))
         res = []
@@ -233,6 +236,69 @@ def sha3_256(x):
         if len(Z) <= 256:
             S = unflatten(Keccak_f(flatten(S)))
     return sbitvec.from_vec(Z[:256])
+
+sha256_circuit = None
+
+def sha256(x):
+    """
+    This function implements SHA2-256::
+
+      from circuit import sha256
+      a = sbitvec.from_vec([])
+      b = sbitvec.from_hex('d3', reverse=False)
+      c = sbitvec.from_hex(
+        '3ebfb06db8c38d5ba037f1363e118550aad94606e26835a01af05078533cc25f2f39573c04b632f62f68c294ab31f2a3e2a1a0d8c2be51',
+        reverse=False)
+      d = sbitvec.from_hex(
+        '5a86b737eaea8ee976a0a24da63e7ed7eefad18a101c1211e2b3650c5187c2a8a650547208251f6d4237e661c7bf4c77f335390394c37fa1a9f9be836ac28509',
+        reverse=False)
+
+      for x in a, b, c:
+        sha256(x).reveal().print_reg()
+
+    This should output the hashes of the above inputs, namely
+    the `test vectors
+    <https://csrc.nist.gov/Projects/Cryptographic-Algorithm-Validation-Program/Secure-Hashing#shavs>`_
+    of SHA2-256 for 0, 8, 440, 512 bits::
+
+      Reg[0] = 0xe3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855 #
+      Reg[0] = 0x28969cdfa74a12c82f3bad960b0b000aca2ac329deea5c2328ebc6f2ba9802c1 #
+      Reg[0] = 0x6595a2ef537a69ba8583dfbf7f5bec0ab1f93ce4c8ee1916eff44a93af5749c4 #
+      Reg[0] = 0x42e61e174fbb3897d6dd6cef3dd2802fe67b331953b06114a65c772859dfc1aa #
+
+    """
+    global sha256_circuit
+    if not sha256_circuit:
+        sha256_circuit = Circuit('sha256')
+
+    L = len(x.v)
+    padding = [1]
+    while (len(padding) + L) % 512 != (512 - 64):
+        padding.append(0)
+    padding += [(L >> (63 - i)) & 1 for i in range(64)]
+
+    padded = x.v + [sbit(b) for b in padding]
+
+    h = [
+        0x6a, 0x09, 0xe6, 0x67,
+        0xbb, 0x67, 0xae, 0x85,
+        0x3c, 0x6e, 0xf3, 0x72,
+        0xa5, 0x4f, 0xf5, 0x3a,
+        0x51, 0x0e, 0x52, 0x7f,
+        0x9b, 0x05, 0x68, 0x8c,
+        0x1f, 0x83, 0xd9, 0xab,
+        0x5b, 0xe0, 0xcd, 0x19
+    ]
+
+    state = list(reversed(
+        [sbit((h[i // 8] >> (7 - i % 8)) & 1) for i in range(256)]))
+
+    for i in range(0, len(padded), 512):
+        chunk = list(reversed(padded[i:i + 512]))
+        assert len(chunk) == 512
+        state = sha256_circuit(chunk + state).v
+
+    return sbitvec.from_vec(state)
 
 class ieee_float:
     """

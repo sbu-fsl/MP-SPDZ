@@ -53,7 +53,7 @@ public:
       << 1e-3 * new_len << " KB, " << send_timer.elapsed() << " seconds and " << n_send
       << " iterations to send " << 1e-3 * len << " KB" << endl;
 #endif
-        receive_stream.len = new_len;
+        receive_stream.set_length(new_len);
         receive_stream.reset_read_head();
     }
 

@@ -10,7 +10,7 @@
 
 class YaoGarbleWire;
 
-class YaoGarbleInput
+class YaoGarbleInput : public InputterBase
 {
 public:
     YaoGarbler& garbler;

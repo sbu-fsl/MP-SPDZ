@@ -2,6 +2,7 @@
 #include "Tools/random.h"
 #include "Tools/benchmarking.h"
 #include "Tools/Bundle.h"
+#include "Tools/CodeLocations.h"
 #include "Processor/OnlineOptions.h"
 
 #include <stdio.h>
@@ -156,6 +157,7 @@ void BaseOT::exec_base(bool new_receiver_inputs)
 template<class T, class U>
 void BaseOT::exec_base(bool new_receiver_inputs)
 {
+    CODE_LOCATION
     int i, j, k;
     size_t len;
     PRNG G;

@@ -9,6 +9,7 @@
 #include "DabitSacrifice.h"
 #include "BufferScope.h"
 #include "Tools/PointerVector.h"
+#include "Tools/CodeLocations.h"
 
 #include <math.h>
 
@@ -32,6 +33,7 @@ void DabitSacrifice<T>::sacrifice_without_bit_check(vector<dabit<T> >& dabits,
         vector<dabit<T> >& check_dabits, SubProcessor<T>& proc,
         ThreadQueues*)
 {
+    CODE_LOCATION
 #ifdef VERBOSE_DABIT
     cerr << "Sacrificing daBits" << endl;
     Timer timer;
@@ -117,6 +119,7 @@ void DabitSacrifice<T>::sacrifice_and_check_bits(vector<dabit<T> >& dabits,
         vector<dabit<T> >& check_dabits, SubProcessor<T>& proc,
         ThreadQueues* queues)
 {
+    CODE_LOCATION
     if (OnlineOptions::singleton.has_option("verbose_dabit"))
         fprintf(stderr, "checking %zu daBits\n", check_dabits.size());
 

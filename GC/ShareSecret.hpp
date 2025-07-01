@@ -56,16 +56,28 @@ void ReplicatedSecret<U>::load_clear(int n, const Integer& x)
 template<class U, int L>
 void RepSecretBase<U, L>::bitcom(StackedVector<U>& S, const vector<int>& regs)
 {
-    *this = 0;
+    plain_bitcom(*this, S, regs);
+}
+
+template<class T, class U>
+void plain_bitcom(T& res, StackedVector<U>& S, const vector<int>& regs)
+{
+    res = 0;
     for (unsigned int i = 0; i < regs.size(); i++)
-        *this ^= (S[regs[i]] << i);
+        res ^= (S[regs[i]] << i);
 }
 
 template<class U, int L>
 void RepSecretBase<U, L>::bitdec(StackedVector<U>& S, const vector<int>& regs) const
 {
+    plain_bitdec(*this, S, regs);
+}
+
+template<class T, class U>
+void plain_bitdec(const T& source, StackedVector<U>& S, const vector<int>& regs)
+{
     for (unsigned int i = 0; i < regs.size(); i++)
-        S[regs[i]] = (*this >> i) & 1;
+        S[regs[i]] = (source >> i) & 1;
 }
 
 template<class U>
@@ -124,7 +136,7 @@ void ShareSecret<U>::inputb(Processor<U>& processor,
         const vector<int>& args)
 {
     auto& party = ShareThread<U>::s();
-    typename U::Input input(*party.MC, party.DataF, *party.P);
+    typename U::Input input(*party.MC, party.DataF, *party.P, party.protocol);
     input.reset_all(*party.P);
     processor.inputb(input, input_processor, args, party.P->my_num());
 }
@@ -135,7 +147,7 @@ void ShareSecret<U>::inputbvec(Processor<U>& processor,
         const vector<int>& args)
 {
     auto& party = ShareThread<U>::s();
-    typename U::Input input(*party.MC, party.DataF, *party.P);
+    typename U::Input input(*party.MC, party.DataF, *party.P, party.protocol);
     input.reset_all(*party.P);
     processor.inputbvec(input, input_processor, args, *party.P);
 }
@@ -152,7 +164,7 @@ void Processor<T>::inputb(typename T::Input& input, ProcessorBase& input_process
 
     for (auto x : a)
     {
-        if (x.from == my_num)
+        if (input.is_me(x.from, my_num))
         {
             bigint whole_input = get_long_input<bigint>(x.params,
                     input_processor, interactive);
@@ -205,7 +217,7 @@ void Processor<T>::inputbvec(typename T::Input& input, ProcessorBase& input_proc
         if (unsigned(x.from) >= unsigned(P.num_players()))
             throw runtime_error("invalid player number");
 
-        if (x.from == my_num)
+        if (input.is_me(x.from, my_num))
         {
             bigint whole_input = get_long_input<bigint>(x.params,
                     input_processor, interactive);
@@ -303,6 +315,15 @@ template<class U, int L>
 void RepSecretBase<U, L>::trans(Processor<U>& processor,
         int n_outputs, const vector<int>& args)
 {
+    vec_trans(processor, n_outputs, args);
+}
+
+template<class U>
+void vec_trans(Processor<U>& processor,
+        int n_outputs, const vector<int>& args)
+{
+    int N_BITS = U::default_length;
+    int L = U::vector_length;
     for (int k = 0; k < L; k++)
     {
         for (int j = 0; j < DIV_CEIL(n_outputs, N_BITS); j++)

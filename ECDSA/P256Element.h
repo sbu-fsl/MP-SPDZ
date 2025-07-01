@@ -30,6 +30,8 @@ public:
     static int size() { return 0; }
     static int length() { return 256; }
     static string type_string() { return "P256"; }
+    static string type_short() { return Scalar::type_short(); }
+    static char type_char() { return Scalar::type_char(); }
 
     static void init(int nid = NID_X9_62_prime256v1);
     static void finish();

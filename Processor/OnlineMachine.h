@@ -17,8 +17,6 @@ protected:
     const char** argv;
     OnlineOptions& online_opts;
 
-    int lg2;
-
     Names playerNames;
 
     bool use_encryption;
@@ -43,7 +41,7 @@ public:
 
     int get_lg2()
     {
-        return lg2;
+        return online_opts.lg2;
     }
 };
 

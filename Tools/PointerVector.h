@@ -41,4 +41,40 @@ public:
     }
 };
 
+template<class T>
+class IteratorVector : public CheckVector<T>
+{
+    typename vector<T>::iterator it;
+
+public:
+    void clear()
+    {
+        CheckVector<T>::clear();
+        reset();
+    }
+
+    void reset()
+    {
+        it = this->begin();
+    }
+
+    T& next()
+    {
+#ifdef CHECK_BUFFER_SIZE
+        require(1);
+#endif
+        return *it++;
+    }
+
+    size_t left()
+    {
+        return this->end() - it;
+    }
+
+    void require(size_t n)
+    {
+        assert(it >= this->begin() and it + n <= this->end());
+    }
+};
+
 #endif /* TOOLS_POINTERVECTOR_H_ */

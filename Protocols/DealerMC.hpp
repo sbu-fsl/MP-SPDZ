@@ -60,6 +60,7 @@ void DealerMC<T>::prepare_open(const T& secret, int n_bits)
 template<class T>
 void DealerMC<T>::exchange(const Player&)
 {
+    CODE_LOCATION
     if (sub_player)
         internal.exchange(*sub_player);
 }

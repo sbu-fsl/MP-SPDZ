@@ -13,7 +13,7 @@ gdb_screen()
     IFS=
     name=${*/-/}
     IFS=' '
-    screen -S :$name -d -m bash -l -c "echo $*; echo $LIBRARY_PATH; gdb $prog -ex \"run $*\""
+    screen -S :$screen_prefix$name -d -m bash -l -c "echo $*; echo $LIBRARY_PATH; gdb $prog -ex \"run $*\""
 }
 
 valgrind_screen()
@@ -56,7 +56,7 @@ run_player() {
        params="$params -N $players"
     fi
     if test "$prog"; then
-	log_prefix=$prog-
+	log_prefix=$LOG_PREFIX$prog-
     fi
     if test "$BENCH"; then
 	log_prefix=$log_prefix$bin-$(echo "$*" | sed 's/ /-/g')-N$players-
@@ -70,7 +70,7 @@ run_player() {
       fi
       front_player=${GDB_PLAYER:-0}
       >&2 echo Running $my_prefix $SPDZROOT/$bin $i $params
-      log=logs/$log_prefix$i
+      log=logs/$log_prefix$LOG_SUFFIX$i
       $my_prefix $SPDZROOT/$bin $i $params 2>&1 |
 	  {
 	      if test "$BENCH"; then

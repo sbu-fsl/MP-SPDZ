@@ -70,7 +70,7 @@ layers = ml.layers_from_torch(net, training_samples.shape, 128, input_via=0)
 
 ml.set_n_threads(8)
 
-optimizer = ml.Optimizer(layers)
+optimizer = ml.Optimizer(layers, program=program)
 
 # output to be used in Scripts/torch_mnist_lenet_import.py
 optimizer.reveal_model_to_binary()

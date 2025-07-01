@@ -58,9 +58,8 @@ void BitAdder::add(vector<vector<T> >& res,
         const vector<vector<vector<T> > >& summands, size_t begin, size_t end,
         SubProcessor<T>& proc, int length, int input_begin, const void* supply)
 {
-#ifdef VERBOSE_EDA
-    fprintf(stderr, "add bits %lu to %lu\n", begin, end);
-#endif
+    if (OnlineOptions::singleton.has_option("verbose_eda"))
+        fprintf(stderr, "add bits %lu to %lu\n", begin, end);
 
     if (input_begin < 0)
         input_begin = begin;

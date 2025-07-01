@@ -22,7 +22,8 @@ class DealerInput : public InputBase<T>
 
 public:
     DealerInput(SubProcessor<T>& proc, typename T::MAC_Check&);
-    DealerInput(typename T::MAC_Check&, Preprocessing<T>&, Player& P);
+    DealerInput(typename T::MAC_Check&, Preprocessing<T>&, Player& P,
+            typename T::Protocol* = 0);
     DealerInput(Player& P);
     DealerInput(SubProcessor<T>*, Player& P);
     ~DealerInput();

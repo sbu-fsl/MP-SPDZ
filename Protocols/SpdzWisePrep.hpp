@@ -37,6 +37,7 @@ void SpdzWisePrep<T>::buffer_bits(false_type, true_type, false_type)
 template<class T>
 void SpdzWisePrep<T>::buffer_bits(false_type, false_type, true_type)
 {
+    CODE_LOCATION
     typedef MaliciousRep3Share<gf2n> part_type;
     vector<typename part_type::Honest> bits;
     ProtocolSet<typename part_type::Honest> set(this->proc->P, {});
@@ -59,6 +60,7 @@ template<int K, int S>
 void buffer_bits_from_squares_in_ring(vector<SpdzWiseRingShare<K, S>>& bits,
         SubProcessor<SpdzWiseRingShare<K, S>>* proc)
 {
+    CODE_LOCATION
     assert(proc != 0);
     typedef SpdzWiseRingShare<K + 2, S> BitShare;
     typename BitShare::MAC_Check MC(proc->MC.get_alphai());
@@ -108,6 +110,7 @@ void SpdzWisePrep<T>::buffer_bits(true_type, false_type, true_type)
 template<class T>
 void SpdzWisePrep<T>::buffer_inputs(int player)
 {
+    CODE_LOCATION
     assert(this->proc != 0);
     assert(this->protocol != 0);
     vector<T> rs(BaseMachine::input_batch_size<T>(player,

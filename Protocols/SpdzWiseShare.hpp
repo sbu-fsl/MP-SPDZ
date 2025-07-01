@@ -13,6 +13,7 @@
 template<class T>
 void SpdzWiseShare<T>::read_or_generate_mac_key(string directory, Player& P, T& mac_key)
 {
+    CODE_LOCATION
     bool fresh = false;
 
     try

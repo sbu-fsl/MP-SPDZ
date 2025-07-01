@@ -16,6 +16,8 @@ using namespace std;
 #include "Tools/PointerVector.h"
 #include "Networking/Player.h"
 #include "Processor/Memory.h"
+#include "Math/FixedVec.h"
+#include "Processor/TruncPrTuple.h"
 
 template<class T> class SubProcessor;
 template<class T> class ReplicatedMC;
@@ -37,10 +39,21 @@ public:
 
     ReplicatedBase(Player& P);
     ReplicatedBase(Player& P, array<PRNG, 2>& prngs);
+    virtual ~ReplicatedBase() {}
 
     ReplicatedBase branch() const;
 
+    template<class T>
+    FixedVec<T, 2> get_random();
+    template<class T>
+    void randomize(FixedVec<T, 2>& res);
+
     int get_n_relevant_players() { return P.num_players() - 1; }
+
+    template<class T>
+    void output_time();
+
+    virtual double randomness_time();
 };
 
 /**
@@ -61,13 +74,16 @@ public:
 
     typedef SecureShuffle<T> Shuffler;
 
-    long trunc_pr_counter;
+    long trunc_pr_counter, trunc_pr_big_counter;
     long rounds, trunc_rounds;
     long dot_counter;
     long bit_counter;
     long counter;
 
     int buffer_size;
+
+    template<class U>
+    static void sync(vector<U>& x, Player& P);
 
     ProtocolBase();
     virtual ~ProtocolBase();
@@ -95,6 +111,9 @@ public:
     /// Store next multiplication result in ``res``
     virtual void finalize_mult(T& res, int n = -1);
 
+    void prepare_mul_fast(const T& x, const T& y) { prepare_mul(x, y); }
+    T finalize_mul_fast() { return finalize_mul(); }
+
     /// Initialize dot product round
     void init_dotprod() { init_mul(); }
     /// Add operand pair to current dot product
@@ -106,7 +125,11 @@ public:
 
     virtual T get_random();
 
-    virtual void trunc_pr(const vector<int>& regs, int size, SubProcessor<T>& proc)
+    virtual void trunc_pr(const vector<int>& regs, int size, SubProcessor<T>& proc,
+            true_type)
+    { (void) regs, (void) size; (void) proc; throw runtime_error("trunc_pr not implemented"); }
+    virtual void trunc_pr(const vector<int>& regs, int size, SubProcessor<T>& proc,
+            false_type)
     { (void) regs, (void) size; (void) proc; throw runtime_error("trunc_pr not implemented"); }
 
     virtual void randoms(T&, int) { throw runtime_error("randoms not implemented"); }
@@ -132,6 +155,19 @@ public:
     virtual vector<int> get_relevant_players();
 
     virtual int get_buffer_size() { return 0; }
+
+    virtual void set_suffix(const string&) {}
+
+    template<class U>
+    void forward_sync(vector<U>&) {}
+
+    void unsplit(StackedVector<T>&,
+            StackedVector<typename T::bit_type>&, const Instruction&)
+    { throw runtime_error("unsplitting not implemented"); }
+
+    virtual void set_fast_mode(bool) {}
+
+    double randomness_time() { return 0; }
 };
 
 /**
@@ -140,14 +176,29 @@ public:
 template <class T>
 class Replicated : public ReplicatedBase, public ProtocolBase<T>
 {
+    typedef typename T::clear value_type;
+
     array<octetStream, 2> os;
-    PointerVector<typename T::clear> add_shares;
+    IteratorVector<typename T::clear> add_shares;
     typename T::clear dotprod_share;
 
-    template<class U>
-    void trunc_pr(const vector<int>& regs, int size, U& proc, true_type);
-    template<class U>
-    void trunc_pr(const vector<int>& regs, int size, U& proc, false_type);
+    bool fast_mode;
+
+    void prepare_exchange();
+    void check_received();
+
+    static const int gen_player = 2;
+    static const int comp_player = 1;
+
+    vector<ReplicatedInput<T>*> helper_inputs;
+
+    template<int MY_NUM>
+    void trunc_pr_finish(TruncPrTupleList<T>& infos, ReplicatedInput<T>& input);
+
+    template<int MY_NUM>
+    void unsplit_finish(StackedVector<T>& dest,
+            StackedVector<typename T::bit_type>& source,
+            const Instruction& instruction);
 
 public:
     static const bool uses_triples = false;
@@ -156,6 +207,7 @@ public:
 
     Replicated(Player& P);
     Replicated(const ReplicatedBase& other);
+    ~Replicated();
 
     static void assign(T& share, const typename T::clear& value, int my_num)
     {
@@ -166,11 +218,13 @@ public:
     }
 
     void init_mul();
-    void prepare_mul(const T& x, const T& y, int n = -1);
+    void prepare_mul(const T& x, const T& y, int n = -1) final;
     void exchange();
-    T finalize_mul(int n = -1);
+    T finalize_mul(int n = -1) final;
 
     void prepare_reshare(const typename T::clear& share, int n = -1);
+    void prepare_mul_fast(const T& x, const T& y);
+    T finalize_mul_fast();
 
     void init_dotprod();
     void prepare_dotprod(const T& x, const T& y);
@@ -180,11 +234,27 @@ public:
     template<class U>
     void trunc_pr(const vector<int>& regs, int size, U& proc);
 
+    template<class U>
+    void trunc_pr(const vector<int>& regs, int size, U& proc, true_type);
+    template<class U>
+    void trunc_pr(const vector<int>& regs, int size, U& proc, false_type);
+
     T get_random();
     void randoms(T& res, int n_bits);
 
     void start_exchange();
     void stop_exchange();
+
+    void set_fast_mode(bool change);
+
+    template<int = 0>
+    void unsplit(StackedVector<T>& dest,
+            StackedVector<typename T::bit_type>& source,
+            const Instruction& instruction);
+
+    ReplicatedInput<T>& get_helper_input(size_t i = 0);
+
+    virtual double randomness_time();
 };
 
 #endif /* PROTOCOLS_REPLICATED_H_ */

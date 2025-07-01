@@ -26,8 +26,8 @@ template<class T>
 void check_field_size()
 {
     if (T::length() < OnlineOptions::singleton.security_parameter)
-        throw runtime_error("Field too small for chosen security. "
-                "Increase size with -lgp or decrease security with -S");
+        throw field_too_small(T::length(),
+                OnlineOptions::singleton.security_parameter);
 }
 
 #endif /* PROTOCOLS_MAC_KEY_HPP_ */

@@ -71,6 +71,7 @@
     X(PRINTREGSIGNED, PROC.print_reg_signed(IMM, R0)) \
     X(PRINTREGB, PROC.print_reg(R0, IMM, SIZE)) \
     X(PRINTREGPLAINB, PROC.print_reg_plain(C0)) \
+    X(PRINTREGPLAINSB, PROC.print_reg_plain(S0)) \
     X(PRINTFLOATPLAINB, PROC.print_float(EXTRA)) \
     X(CONDPRINTSTRB, if(C0.get()) PROC.print_str(IMM)) \
 
@@ -87,16 +88,19 @@
     X(EDABIT, Proc.edabit(INST)) \
     X(SEDABIT, Proc.edabit(INST, true)) \
     X(SPLIT, Proc.split(INST)) \
+    X(UNSPLIT, Proc.unsplit(INST)) \
     X(CALL_ARG, ) \
 
-#define GC_INSTRUCTIONS \
-    X(INPUTB, T::inputb(PROC, EXTRA)) \
-    X(INPUTBVEC, T::inputbvec(PROC, PROC, EXTRA)) \
+#define DYNAMIC_INSTRUCTIONS \
     X(LDMSD, PROC.load_dynamic_direct(EXTRA, MD)) \
     X(STMSD, PROC.store_dynamic_direct(EXTRA, MD)) \
     X(LDMSDI, PROC.load_dynamic_indirect(EXTRA, MD)) \
     X(STMSDI, PROC.store_dynamic_indirect(EXTRA, MD)) \
     X(STMSDCI, PROC.store_clear_in_dynamic(EXTRA, MD)) \
+
+#define GC_INSTRUCTIONS DYNAMIC_INSTRUCTIONS \
+    X(INPUTB, T::inputb(PROC, EXTRA)) \
+    X(INPUTBVEC, T::inputbvec(PROC, PROC, EXTRA)) \
     X(CONVSINT, S0.load_clear(IMM, PI1)) \
     X(CONVCINT, C0 = PI1) \
     X(CONVCBIT, T::convcbit(I0, PC1, PROC)) \

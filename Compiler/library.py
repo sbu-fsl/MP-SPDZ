@@ -84,6 +84,10 @@ def print_str(s, *args, print_secrets=False):
     if len(args) != s.count('%s'):
         raise CompilerError('Incorrect number of arguments for string format:', s)
     substrings = s.split('%s')
+    def secret_error(x):
+        raise CompilerError(
+            'Cannot print secret value %s, activate printing of shares with '
+            "'print_secrets=True'" % args[i])
     for i,ss in enumerate(substrings):
         print_plain_str(ss)
         if i < len(args):
@@ -92,18 +96,20 @@ def print_str(s, *args, print_secrets=False):
             else:
                 val = args[i]
             if isinstance(val, Tape.Register):
+                from Compiler.GC.types import sbits
                 if val.is_clear:
                     val.print_reg_plain()
-                elif print_secrets and isinstance(val, _secret):
+                elif print_secrets and isinstance(val, (_secret, sbits)):
                     val.output()
                 else:
-                    raise CompilerError(
-                        'Cannot print secret value %s, activate printing of shares with '
-                        "'print_secrets=True'" % args[i])
+                    secret_error(args[i])
             elif isinstance(val, cfix):
                 val.print_plain()
             elif isinstance(val, sfix) or isinstance(val, sfloat):
-                raise CompilerError('Cannot print secret value:', args[i])
+                if print_secrets:
+                    val.output()
+                else:
+                    secret_error()
             elif isinstance(val, cfloat):
                 val.print_float_plain()
             elif isinstance(val, (list, tuple)):
@@ -437,6 +443,7 @@ class FunctionCallTape(FunctionTape):
                         return my_arg
                     elif isinstance(arg, types._vectorizable):
                         my_arg = arg.same_shape(address=regint())
+                        my_arg.alloc_address = arg.address
                         call_arg(my_arg.address, base.vm_types['ci'])
                         my_args.append(my_arg)
                         my_arg = arg.same_shape(
@@ -494,12 +501,12 @@ class FunctionCallTape(FunctionTape):
             for x, y in zip(out_result, result):
                 call_args += [
                     1, instructions_base.vm_types[x.reg_type],
-                    x.size_for_mem(), x, y]
+                    x.size, x, y]
         for x, y in zip(inside_args, args):
             if isinstance(x, Tape.Register):
                 call_args += [
                     0, instructions_base.vm_types[x.reg_type],
-                    x.size_for_mem(), x, y]
+                    x.size, x, y]
             elif isinstance(x, types._vectorizable):
                 call_args += [0, base.vm_types['ci'], 1,
                               x.address, regint.conv(y.address)]
@@ -556,7 +563,8 @@ class ExportFunction(FunctionCallTape):
                 if isinstance(arg, types._structure):
                     print(arg.i, end=' ', file=out)
                 elif isinstance(arg, types._vectorizable):
-                    print(arg.address, end=' ', file=out)
+                    assert util.is_constant(arg.alloc_address)
+                    print(arg.alloc_address, arg.address.i, end=' ', file=out)
                 else:
                     CompilerError('argument not supported: %s', arg)
             print(file=out)
@@ -823,6 +831,7 @@ def loopy_chunkier_odd_even_merge_sort(a, n=None, max_chunk_size=512, n_threads=
 
 def loopy_odd_even_merge_sort(a, sorted_length=1, n_parallel=32,
                               n_threads=None, key_indices=None):
+    get_program().reading('sorting', 'KSS13')
     a_in = a
     if isinstance(a_in, list):
         a = Array.create_from(a)
@@ -1013,7 +1022,11 @@ def for_range_opt(start, stop=None, step=None, budget=None):
     optimization.
 
     :param start/stop/step: int/regint/cint (used as in :py:func:`range`)
-      or :py:obj:`start` only as list/tuple of int (see below)
+      or :py:obj:`start` only as list/tuple of int (see below).
+      The optimization works best if all arguments are int or :py:obj:None.
+      Otherwise, the budget has to be smaller than the number of loops for
+      any optimization to take place.
+
     :param budget: number of instructions after which to start optimization
       (default is 1000 or as given with ``--budget``)
 
@@ -1104,6 +1117,7 @@ def map_reduce_single(n_parallel, n_loops, initializer=lambda *x: [],
             parent_block = get_block()
             prevent_breaks = get_program().prevent_breaks
             get_program().prevent_breaks = False
+            get_program().reading('loop optimization', 'Keller24')
             @while_do(lambda x: x + n_opt_loops_reg <= n_loops, regint(0))
             def _(i):
                 state = tuplify(initializer())
@@ -1702,7 +1716,13 @@ def if_statement(condition, if_fn, else_fn=None):
 
 def if_(condition):
     """
-    Conditional execution without else block.
+    Conditional execution without else block. Note that this does not
+    work compile-time (Python) data structures, so if you change
+    lists, dictionaries, or objects, you might not get the desired
+    result. You can avoid problems by creating container types like
+    :py:class:`~Compiler.types.Array` and
+    :py:class:`~Compiler.types.MemValue` *before* the condition and
+    only using assignment operations inside.
 
     :param condition: regint/cint/int
 
@@ -1713,6 +1733,7 @@ def if_(condition):
         @if_(x > 0)
         def _():
             ...
+
     """
     try:
         condition = bool(condition)
@@ -1944,8 +1965,8 @@ def approximate_reciprocal(divisor, k, f, theta):
     normalized_divisor = divisor
 
     for i in range(k):
-        flag = flag | (bits[i] == 1)
-        flag_zero = cint(flag == 0)
+        flag = flag | bits[i]
+        flag_zero = flag.bit_not()
         cnt_leading_zeros += flag_zero
         normalized_divisor <<= flag_zero
 
@@ -1976,8 +1997,8 @@ def cint_cint_division(a, b, k, f):
     theta = int(ceil(log(k/3.5) / log(2)))
     two = cint(2) * two_power(f)
 
-    sign_b = cint(1) - 2 * cint(b.less_than(0, k))
-    sign_a = cint(1) - 2 * cint(a.less_than(0, k))
+    sign_b = cint(1) - 2 * cint(b.less_than(0, k, sync=False))
+    sign_a = cint(1) - 2 * cint(a.less_than(0, k, sync=False))
     absolute_b = b * sign_b
     absolute_a = a * sign_a
     w0 = approximate_reciprocal(absolute_b, k, f, theta)
@@ -2031,6 +2052,7 @@ def FPDiv(a, b, k, f, simplex_flag=False, nearest=False):
     """
         Goldschmidt method as presented in Catrina10,
     """
+    get_program().reading('fixed-point division', 'CdH10-fixed')
     prime = get_program().prime
     if 2 * k == int(get_program().options.ring) or \
        (prime and 2 * k <= (prime.bit_length() - 1)):
@@ -2040,13 +2062,29 @@ def FPDiv(a, b, k, f, simplex_flag=False, nearest=False):
         # no probabilistic truncation in binary circuits
         nearest = True
     res_f = f
-    f = max((k - nearest) // 2 + 1, f)
+    min_f = (k - nearest) // 2 + 1
+    max_length = lambda f: k + 3 * f - res_f
+
+    if get_program().options.ring:
+        max_f = (int(get_program().options.ring) - k + res_f) // 3
+        if max_f < res_f:
+            min_ring = int(math.ceil(max_length(res_f) / 64) * 64)
+            print('WARNING: Reducing precision of fixed-point division. '
+                  'Increase ring size for full precision, '
+                  "maybe using '-R %d'." % min_ring)
+        else:
+            max_f = res_f
+    else:
+        max_f = res_f
+
+    f = max(min_f, max_f)
     assert 2 * f > k - nearest
     theta = int(ceil(log(k/3.5) / log(2)))
+    l_y = max_length(f)
 
-    l_y = k + 3 * f - res_f
     comparison.require_ring_size(
-        l_y, 'division (https://www.ifca.ai/pub/fc10/31_47.pdf)')
+        l_y, 'division',
+        suffix=" or consider reducing k in 'sfix.precision(f, k)'")
 
     base.set_global_vector_size(b.size)
     alpha = b.get_type(2 * k).two_power(2*f, size=b.size)
@@ -2069,6 +2107,7 @@ def FPDiv(a, b, k, f, simplex_flag=False, nearest=False):
     y = y.round(l_y, 3 * f - res_f, nearest, signed=True)
     return y
 
+@instructions_base.ret_cisc
 def AppRcr(b, k, f, simplex_flag=False, nearest=False):
     """
         Approximate reciprocal of [b]:
@@ -2091,7 +2130,7 @@ def Norm(b, k, f, simplex_flag=False):
     # For simplex, we can get rid of computing abs(b)
     temp = None
     if simplex_flag == False:
-        temp = b.less_than(0, k)
+        temp = b.less_than(0, k, sync=False)
     elif simplex_flag == True:
         temp = cint(0)
 

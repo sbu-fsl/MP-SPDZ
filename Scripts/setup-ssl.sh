@@ -14,4 +14,5 @@ for i in `seq 0 $[n-1]`; do
     openssl req -newkey rsa -nodes -x509 -out $ssl_dir/P$i.pem -keyout $ssl_dir/P$i.key -subj "/CN=P$i"
 done
 
-c_rehash $ssl_dir
+rm -v $ssl_dir/*.0
+c_rehash -v $ssl_dir

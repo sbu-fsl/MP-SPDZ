@@ -4,6 +4,7 @@
 #include "Tools/random.h"
 #include "Tools/Exceptions.h"
 #include "Tools/Commit.h"
+#include "Tools/CodeLocations.h"
 #include "Math/Z2k.h"
 #include "Math/gfp.h"
 #include "Math/gf2n.h"
@@ -21,6 +22,7 @@ void Commit(vector< vector<octetStream> >& Comm_data,
             vector<octetStream>& Open_data,
             const vector< vector<octetStream> >& data,const Player& P,int num_runs)
 {
+  CODE_LOCATION
   int my_number=P.my_num();
   for (int i=0; i<num_runs; i++)
      { Comm_data[i].resize(P.num_players());
@@ -38,6 +40,7 @@ void Open(vector< vector<octetStream> >& data,
           const vector<octetStream>& My_Open_data,
           const Player& P,int num_runs,int dont)
 {
+  CODE_LOCATION
   int my_number=P.my_num();
   int num_players=P.num_players();
   vector<octetStream> Open_data(num_players);
@@ -62,6 +65,7 @@ void Open(vector< vector<octetStream> >& data,
           const vector<int> open,
           const Player& P,int num_runs)
 {
+  CODE_LOCATION
   int my_number=P.my_num();
   int num_players=P.num_players();
   vector<octetStream> Open_data(num_players);
@@ -87,6 +91,7 @@ void Commit_To_Challenge(vector<unsigned int>& e,
                          vector<octetStream>& Comm_e,vector<octetStream>& Open_e,
                          const Player& P,int num_runs)
 {
+  CODE_LOCATION
   PRNG G;
   G.ReSeed();
 
@@ -105,6 +110,7 @@ int Open_Challenge(vector<unsigned int>& e,vector<octetStream>& Open_e,
                    const vector<octetStream>& Comm_e,
                    const Player& P,int num_runs)
 {
+  CODE_LOCATION
   // Now open the challenge commitments and determine which run was for real
   P.Broadcast_Receive(Open_e);
   
@@ -126,6 +132,7 @@ int Open_Challenge(vector<unsigned int>& e,vector<octetStream>& Open_e,
 
 void Create_Random_Seed(octet* seed,const PlayerBase& P,int len)
 {
+  CODE_LOCATION
   PRNG G;
   G.ReSeed();
   vector<octetStream> e(P.num_players());
@@ -152,6 +159,7 @@ void Create_Random_Seed(octet* seed,const PlayerBase& P,int len)
 
 void Commit_And_Open_(vector<octetStream>& datas, const Player& P, Coordinator& coordinator)
 {
+  CODE_LOCATION
   vector<octetStream> Comm_data(P.num_players());
   vector<octetStream> Open_data(P.num_players());
 
@@ -178,6 +186,7 @@ void Commit_To_Seeds(vector<PRNG>& G,
 		     vector<octetStream>& Open_seeds,
 		     const Player& P,int num_runs)
 {
+  CODE_LOCATION
   seeds.resize(num_runs);
   Comm_seeds.resize(num_runs);
   Open_seeds.resize(num_runs);

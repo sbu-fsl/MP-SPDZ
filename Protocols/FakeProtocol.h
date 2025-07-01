@@ -11,6 +11,7 @@
 #include "Math/Z2k.h"
 #include "Processor/Instruction.h"
 #include "Processor/TruncPrTuple.h"
+#include "FHE/tools.h"
 
 #include <cmath>
 
@@ -87,7 +88,7 @@ class FakeProtocol : public ProtocolBase<T>
 
     int fails;
 
-    vector<size_t> trunc_stats;
+    vector<vector<size_t>> trunc_stats;
 
     map<string, size_t> cisc_stats;
     map<int, size_t> ltz_stats;
@@ -98,23 +99,50 @@ public:
     Player& P;
 
     FakeProtocol(Player& P) :
-            fails(0), trunc_stats(T::MAX_N_BITS + 1), P(P)
+            fails(0), trunc_stats(T::MAX_N_BITS + 1,
+                    vector<size_t>(T::MAX_N_BITS + 1)), P(P)
     {
     }
 
-#ifdef VERBOSE
     ~FakeProtocol()
     {
+        if (not OnlineOptions::singleton.has_option("verbose_fake"))
+            return;
+
         output_trunc_max<0>(T::invertible);
-        double expected = 0;
+        vector<double> expected(T::MAX_N_BITS + 1);
         for (int i = 0; i <= T::MAX_N_BITS; i++)
         {
-            if (trunc_stats[i] != 0)
-                cerr << i << ": " << trunc_stats[i] << endl;
-            expected += trunc_stats[i] * exp2(i - T::MAX_N_BITS);
+            if (sum(trunc_stats[i]))
+            {
+                cerr << i << ": ";
+                for (int j = 0; j <= T::MAX_N_BITS; j++)
+                {
+                    cerr << trunc_stats[i][j] << " ";
+                    for (int k = 0; k < T::MAX_N_BITS - i; k++)
+                        expected[k] += trunc_stats[i][j] * exp2(j - T::MAX_N_BITS);
+                }
+                cerr << endl;
+            }
         }
-        if (expected != 0)
-            cerr << "Expected truncation failures: " << expected << endl;
+        if (sum(expected) != 0)
+        {
+            cerr << "Expected truncation failures (log): ";
+            for (size_t i = 0; i < expected.size(); i++)
+            {
+                auto x = expected[i];
+                if (x)
+                {
+                    if (int(i) == OnlineOptions::singleton.trunc_error)
+                        cerr << "*";
+                    cerr << int(log2(x));
+                    if (int(i) == OnlineOptions::singleton.trunc_error)
+                        cerr << "*";
+                    cerr << " ";
+                }
+            }
+            cerr << endl;
+        }
         for (auto& x : cisc_stats)
         {
             cerr << x.second << " " << x.first << endl;
@@ -136,7 +164,6 @@ public:
     void output_trunc_max(true_type)
     {
     }
-#endif
 
     FakeProtocol branch()
     {
@@ -194,22 +221,16 @@ public:
         return 1;
     }
 
-    void trunc_pr(const vector<int>& regs, int size, SubProcessor<T>& proc)
-    {
-        trunc_pr<0>(regs, size, proc, T::characteristic_two);
-    }
-
-    template<int>
+    template<int = 0>
     void trunc_pr(const vector<int>&, int, SubProcessor<T>&, true_type)
     {
         throw not_implemented();
     }
 
-    template<int>
+    template<int = 0>
     void trunc_pr(const vector<int>& regs, int size, SubProcessor<T>& proc, false_type)
     {
         this->trunc_rounds++;
-        this->trunc_pr_counter += size * regs.size() / 4;
         for (size_t i = 0; i < regs.size(); i += 4)
             for (int l = 0; l < size; l++)
             {
@@ -219,7 +240,7 @@ public:
                 tmp = tmp < T() ? (T() - tmp) : tmp;
                 trunc_max = max(trunc_max, tmp);
 #ifdef TRUNC_PR_EMULATION_STATS
-                trunc_stats.at(tmp == T() ? 0 : tmp.bit_length())++;
+                trunc_stats.at(regs[i + 2]).at(tmp == T() ? 0 : tmp.bit_length())++;
 #endif
 #ifdef CHECK_BOUNDS_IN_TRUNC_PR_EMULATION
                 auto test = (source >> (regs[i + 2]));
@@ -231,7 +252,7 @@ public:
                             << "-bit truncation (test value "
                             << typename T::clear(test) << ")" << endl;
                     fails++;
-                    if (fails > 1000)
+                    if (fails > CHECK_BOUNDS_IN_TRUNC_PR_EMULATION)
                         throw runtime_error("trunc_pr overflow");
                 }
 #endif
@@ -253,12 +274,36 @@ public:
                         res = -T(((-source + r) >> n_shift) - (r >> n_shift));
                     else
                         res = ((source + r) >> n_shift) - (r >> n_shift);
+                    this->trunc_pr_big_counter++;
+
+#ifdef ERROR_CHECK_IN_TRUNC_PR_EMULATION
+                    T exact = tmp >> n_shift;
+                    exact = source.negative() ? -exact : exact;
+
+                    if (abs(res - exact) > 1)
+                    {
+                        cerr << "(" << regs[i + 2] << "," << n_shift
+                                << ")-truncation failed on "
+                                << tmp.bit_length()
+                                << "-bit value: " << res << " vs. " << exact
+                                << ", input: " << source
+                                << ", randomness: " << r
+                                << endl;
+                        fails++;
+                        if (fails > ERROR_CHECK_IN_TRUNC_PR_EMULATION)
+                            throw runtime_error("trunc_pr error");
+                    }
+#endif
                 }
                 else
                 {
                     T r;
                     r.randomize_part(G, n_shift);
-                    res = (source + r) >> n_shift;
+                    if (source.negative())
+                        res = -T((-source + r) >> n_shift);
+                    else
+                        res = (source + r) >> n_shift;
+                    this->trunc_pr_counter++;
                 }
 #endif
             }

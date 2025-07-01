@@ -313,6 +313,7 @@ void TreeSum<T>::add_openings(vector<T>& values, const Player& P,
 template<class T>
 void TreeSum<T>::start(vector<T>& values, const Player& P)
 {
+  CODE_LOCATION
   if (opening_sum < 2)
     opening_sum = P.num_players();
   if (max_broadcast < 2)

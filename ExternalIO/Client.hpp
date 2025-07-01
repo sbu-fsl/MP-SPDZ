@@ -79,7 +79,11 @@ void Client::send_private_inputs(const vector<T>& values)
 
         int n_expected = active ? 3 : 1;
         if (os.get_length() != n_expected * T::size() * values.size())
-            throw runtime_error("unexpected data length in sending");
+            throw runtime_error(
+                    "unexpected data length in sending, "
+                            "server-side code has to have to correct length, "
+                            "most likely 'receive_from_client("
+                            + to_string(values.size()) + ", ...)'");
 
         for (int j = 0; j < num_inputs; j++)
         {

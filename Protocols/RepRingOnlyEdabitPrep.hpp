@@ -13,6 +13,7 @@
 template<class T>
 void RepRingOnlyEdabitPrep<T>::buffer_edabits(int n_bits, ThreadQueues*)
 {
+    CODE_LOCATION
     assert(this->proc);
     int dl = T::bit_type::default_length;
     int buffer_size = DIV_CEIL(BaseMachine::edabit_batch_size<T>(n_bits, this->buffer_size), dl) * dl;

@@ -66,7 +66,7 @@ vm: arithmetic binary
 doc:
 	cd doc; $(MAKE) html
 
-arithmetic: rep-ring rep-field shamir semi2k-party.x semi-party.x mascot sy dealer-ring-party.x
+arithmetic: rep-ring rep-field shamir semi2k-party.x semi-party.x mascot sy dealer-ring-party.x fd emulate.x
 binary: rep-bin yao semi-bin-party.x tinier-party.x tiny-party.x ccd-party.x malicious-ccd-party.x real-bmr
 
 all: overdrive she-offline
@@ -131,6 +131,11 @@ shamir: shamir-party.x malicious-shamir-party.x atlas-party.x galois-degree.x
 
 sy: sy-rep-field-party.x sy-rep-ring-party.x sy-shamir-party.x
 
+astra: astra-party.x astra-prep-party.x
+trio: trio-party.x trio-prep-party.x
+fd: astra trio
+arithmetic: trio
+
 ecdsa: $(patsubst ECDSA/%.cpp,%.x,$(wildcard ECDSA/*-ecdsa-party.cpp)) Fake-ECDSA.x
 ecdsa-static: static-dir $(patsubst ECDSA/%.cpp,static/%.x,$(wildcard ECDSA/*-ecdsa-party.cpp))
 
@@ -148,14 +153,14 @@ $(FHEOFFLINE): $(FHEOBJS) $(SHAREDLIB)
 
 static/%.x: Machines/%.o $(LIBRELEASE) $(LIBSIMPLEOT) local/lib/libcryptoTools.a local/lib/liblibOTe.a
 	$(MAKE) static-dir
-	$(CXX) -o $@ $(CFLAGS) $^ -Wl,-Map=$<.map -Wl,-Bstatic -static-libgcc -static-libstdc++ $(LIBRELEASE) -llibOTe -lcryptoTools $(LIBSIMPLEOT) $(BOOST) $(LDLIBS) -Wl,-Bdynamic -ldl
+	$(CXX) -o $@ $(CFLAGS) $^ -Wl,-Map=$<.map -Wl,-Bstatic -static-libgcc -static-libstdc++ $(LIBRELEASE) -llibOTe -lcryptoTools $(LIBSIMPLEOT) $(BOOST) $(LDLIBS) -lz -Wl,-Bdynamic -ldl
 
 static/%.x: Machines/BMR/%.o $(LIBRELEASE) $(LIBSIMPLEOT) local/lib/libcryptoTools.a local/lib/liblibOTe.a
 	$(MAKE) static-dir
-	$(CXX) -o $@ $(CFLAGS) $^ -Wl,-Map=$<.map -Wl,-Bstatic -static-libgcc -static-libstdc++ $(LIBRELEASE) -llibOTe -lcryptoTools $(LIBSIMPLEOT) $(BOOST) $(LDLIBS) -Wl,-Bdynamic -ldl
+	$(CXX) -o $@ $(CFLAGS) $^ -Wl,-Map=$<.map -Wl,-Bstatic -static-libgcc -static-libstdc++ $(LIBRELEASE) -llibOTe -lcryptoTools $(LIBSIMPLEOT) $(BOOST) $(LDLIBS) -lz -Wl,-Bdynamic -ldl
 
 static/%.x: ECDSA/%.o ECDSA/P256Element.o $(VMOBJS) $(OT) $(LIBSIMPLEOT)
-	$(CXX) $(CFLAGS) -o $@ $^ -Wl,-Map=$<.map -Wl,-Bstatic -static-libgcc -static-libstdc++ $(BOOST) $(LDLIBS) -Wl,-Bdynamic -ldl
+	$(CXX) $(CFLAGS) -o $@ $^ -Wl,-Map=$<.map -Wl,-Bstatic -static-libgcc -static-libstdc++ $(BOOST) $(LDLIBS) -lz -Wl,-Bdynamic -ldl
 
 static-dir:
 	@ mkdir static 2> /dev/null; true
@@ -321,7 +326,7 @@ boost: deps/libOTe/libOTe
 	python3 build.py --setup --boost --install=$(CURDIR)/local
 maybe-boost: deps/libOTe/libOTe
 	cd `mktemp -d`; \
-	PATH="$(CURDIR)/local/bin:$(PATH)" cmake $(CURDIR)/deps/libOTe || \
+	PATH="$(CURDIR)/local/bin:$(PATH)" cmake $(CURDIR)/deps/libOTe -DCMAKE_CXX_COMPILER=$(CXX) || \
 	{ cd -; make boost; }
 
 OTE_OPTS += -DENABLE_SOFTSPOKEN_OT=ON -DCMAKE_CXX_COMPILER=$(CXX) -DCMAKE_INSTALL_LIBDIR=lib
@@ -370,6 +375,7 @@ cmake:
 	./bootstrap --parallel=8 --prefix=../local && make -j8 && make install
 
 mac-setup: mac-machine-setup
+	Scripts/get-brew.sh
 	brew install openssl boost libsodium gmp yasm ntl cmake
 
 linux-machine-setup:
@@ -382,7 +388,7 @@ deps/sse2neon/sse2neon.h:
 	git submodule update --init deps/sse2neon || git clone https://github.com/DLTcollab/sse2neon deps/sse2neon
 
 clean-deps:
-	-rm -rf local/lib/liblibOTe.* deps/libOTe/out deps/SimplestOT_C deps/SimpleOT
+	-rm -rf local/lib/liblibOTe.* deps/libOTe/out deps/SimplestOT_C/{.git*,*} deps/SimpleOT/{.git*,*}
 
 clean: clean-deps
 	-rm -f */*.o *.o */*.d *.d *.x core.* *.a gmon.out */*/*.o static/*.x *.so

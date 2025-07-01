@@ -13,7 +13,8 @@ Rep4Input<T>::Rep4Input(SubProcessor<T>& proc, MAC_Check_Base<T>&) :
 }
 
 template<class T>
-Rep4Input<T>::Rep4Input(MAC_Check_Base<T>&, Preprocessing<T>&, Player& P) :
+Rep4Input<T>::Rep4Input(MAC_Check_Base<T>&, Preprocessing<T>&, Player& P,
+        Rep4<T>*) :
         protocol(P), P(P)
 {
 }
@@ -78,6 +79,7 @@ void Rep4Input<T>::exchange()
 template<class T>
 void Rep4Input<T>::check()
 {
+    CODE_LOCATION
     bool check_needed = false;
     for (auto& hash : hashes)
         check_needed |= hash.size != 0;

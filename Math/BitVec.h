@@ -41,6 +41,8 @@ public:
     template<int K>
     BitVec_(const Z2<K>& a) : super(a.get_limb(0)) {}
 
+    BitVec_(PRNG& G);
+
     BitVec_ operator+(const BitVec_& other) const { return *this ^ other; }
     BitVec_ operator-(const BitVec_& other) const { return *this ^ other; }
     BitVec_ operator*(const BitVec_& other) const { return *this & other; }
@@ -53,13 +55,25 @@ public:
     BitVec_& operator-=(const BitVec_& other) { *this ^= other; return *this; }
     BitVec_& operator*=(const BitVec_& other) { *this &= other; return *this; }
 
+    BitVec_ operator-() const { return *this; }
+
     BitVec_ extend_bit() const { return -(this->a & 1); }
 
     void extend_bit(BitVec_& res, int) const { res = extend_bit(); }
 
     void mul(const BitVec_& a, const BitVec_& b) { *this = a * b; }
 
-    void randomize(PRNG& G, int n = n_bits) { super::randomize(G); *this = this->mask(n); }
+    void randomize(PRNG& G, int n = -1)
+    {
+        if (n == -1 or is_same<T, bool>())
+            super::randomize(G);
+        else
+        {
+            assert(n <= n_bits);
+            G.get_octets((octet*) &this->a, DIV_CEIL(n, 8));
+            *this = this->mask(n);
+        }
+    }
 
     void pack(octetStream& os) const { os.store_int<sizeof(T)>(this->a); }
     void unpack(octetStream& os) { this->a = os.get_int<sizeof(T)>(); }
@@ -100,5 +114,11 @@ template<class T>
 const true_type BitVec_<T>::characteristic_two;
 template<class T>
 const true_type BitVec_<T>::binary;
+
+template<class T>
+BitVec_<T>::BitVec_(PRNG& G)
+{
+    randomize(G);
+}
 
 #endif /* MATH_BITVEC_H_ */

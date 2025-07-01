@@ -54,7 +54,7 @@ Z2<K>::Z2(const bigint& x) : Z2()
 	memcpy(a, mp->_mp_d, min((size_t)N_BYTES, sizeof(mp_limb_t) * abs(mp->_mp_size)));
 	if (mp->_mp_size < 0)
 		*this = Z2<K>() - *this;
-	normalize();
+	normalize_byte();
 }
 
 template<int K>

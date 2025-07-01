@@ -12,6 +12,7 @@
 template<class T>
 void DealerPrep<T>::buffer_triples()
 {
+    CODE_LOCATION
     assert(this->proc);
     auto& P = this->proc->P;
     vector<bool> senders(P.num_players());
@@ -65,6 +66,7 @@ template<class T>
 template<int>
 void DealerPrep<T>::buffer_inverses(true_type)
 {
+    CODE_LOCATION
     assert(this->proc);
     auto& P = this->proc->P;
     vector<bool> senders(P.num_players());
@@ -103,6 +105,7 @@ void DealerPrep<T>::buffer_inverses(true_type)
 template<class T>
 void DealerPrep<T>::buffer_bits()
 {
+    CODE_LOCATION
     assert(this->proc);
     auto& P = this->proc->P;
     vector<bool> senders(P.num_players());
@@ -135,6 +138,7 @@ void DealerPrep<T>::buffer_bits()
 template<class T>
 void DealerPrep<T>::buffer_dabits(ThreadQueues*)
 {
+    CODE_LOCATION
     assert(this->proc);
     auto& P = this->proc->P;
     vector<bool> senders(P.num_players());
@@ -200,6 +204,7 @@ template<class T>
 template<int>
 void DealerPrep<T>::buffer_edabits(int length, false_type)
 {
+    CODE_LOCATION
     assert(this->proc);
     auto& P = this->proc->P;
     vector<bool> senders(P.num_players());

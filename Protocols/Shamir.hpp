@@ -63,6 +63,7 @@ Shamir<T>::Shamir(Player& P, int t) :
         threshold = ShamirMachine::s().threshold;
     n_mul_players = 2 * threshold + 1;
     resharing = new ShamirInput<T>(0, P);
+    reset();
 }
 
 template<class T>
@@ -115,6 +116,7 @@ void Shamir<T>::prepare_mul(const T& x, const T& y, int n)
 template<class T>
 void Shamir<T>::exchange()
 {
+    CODE_LOCATION
     assert(resharing);
     resharing->exchange();
 }
@@ -251,6 +253,7 @@ void Shamir<T>::get_hyper(vector<vector<typename T::open_type> >& hyper,
 template<class T>
 vector<T> Shamir<T>::get_randoms(PRNG& G, int t)
 {
+    CODE_LOCATION
     auto& hyper = get_hyper(t);
     if (random_input == 0)
         random_input = new ShamirInput<T>(0, P, threshold);

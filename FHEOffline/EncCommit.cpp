@@ -83,6 +83,7 @@ template <class FD>
 void covert_generation(Plaintext_<FD>& mess, vector<Ciphertext>& C,
     const vector<const FHE_PK*>& pks, const Player* P, int num_runs, condition cond)
 {
+  CODE_LOCATION
   const FHE_Params& params=(*pks[0]).get_params();
 
   /* Commit to the seeds */
@@ -194,6 +195,7 @@ bool check_norm(const Rq_Element& value, const bigint& bound)
 template<class T,class FD,class S>
 void EncCommit<T,FD,S>::Create_More() const
 {
+  CODE_LOCATION
   const FHE_Params& params=(*pk).get_params();
 
   // Tweak by using p rather than p/2, as we do not center the ciphertexts

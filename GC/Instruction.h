@@ -90,6 +90,7 @@ enum
     PRINTREGPLAINB = 0x222,
     PRINTFLOATPLAINB = 0x223,
     CONDPRINTSTRB = 0x224,
+    PRINTREGPLAINSB = 0x225,
     // write to regint
     CONVCBIT = 0x230,
     CONVCBITVEC = 0x231,

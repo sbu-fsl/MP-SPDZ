@@ -6,6 +6,13 @@ dishonest majority, semi-honest/passive and malicious/active
 corruption. The underlying technologies span secret sharing,
 homomorphic encryption, and garbled circuits.
 
+#### Frequently Asked Questions
+
+[The documentation](https://mp-spdz.readthedocs.io/en/latest) contains
+section on a number of [frequently asked
+topics](https://mp-spdz.readthedocs.io/en/latest/troubleshooting.html)
+as well as information on how to solve common issues.
+
 #### Contact
 
 [Filing an issue on GitHub](https://github.com/data61/MP-SPDZ/issues)
@@ -23,18 +30,31 @@ to reproduce problems from incomplete code, and please include which
 protocol you have used (if applicable) because there are considerable
 differences between the various protocols.
 
-#### Frequently Asked Questions
+#### Paper and Citation
 
-[The documentation](https://mp-spdz.readthedocs.io/en/latest) contains
-section on a number of [frequently asked
-topics](https://mp-spdz.readthedocs.io/en/latest/troubleshooting.html)
-as well as information on how to solve common issues.
+The design of MP-SPDZ is described in [this
+paper](https://eprint.iacr.org/2020/521). If you use it for an
+academic project, please cite:
+
+```
+@inproceedings{mp-spdz,
+    author = {Marcel Keller},
+    title = {{MP-SPDZ}: A Versatile Framework for Multi-Party Computation},
+    booktitle = {Proceedings of the 2020 ACM SIGSAC Conference on
+    Computer and Communications Security},
+    year = {2020},
+    doi = {10.1145/3372297.3417872},
+    url = {https://doi.org/10.1145/3372297.3417872},
+}
+```
 
 #### TL;DR (Binary Distribution on Linux or Source Distribution on macOS)
 
-This requires either a Linux distribution originally released 2018 or
-later (glibc 2.18) or macOS High Sierra or later as well as Python 3
-and basic command-line utilities.
+This requires either a Linux distribution originally released 2019 or
+later (glibc 2.28) or macOS High Sierra or later as well as Python 3
+and basic command-line utilities. On macOS, we recommend downloading
+directly from GitHub due to the use of git for dependencies (see next
+section).
 
 Download and unpack the
 [distribution](https://github.com/data61/MP-SPDZ/releases),
@@ -51,16 +71,23 @@ Scripts/compile-run.py -E mascot tutorial
 This runs [the tutorial](Programs/Source/tutorial.mpc) with two
 parties and malicious security.
 
-#### TL;DR (Source Distribution)
+#### TL;DR (Source from GitHub)
+
+You need to have
+Git[https://git-scm.com/book/en/v2/Getting-Started-Installing-Git] in
+order to clone the repository.
 
 On Linux, this requires a working toolchain and [all
 requirements](#requirements). On Ubuntu, the following might suffice:
 ```
 sudo apt-get install automake build-essential clang cmake git libboost-dev libboost-filesystem-dev libboost-iostreams-dev libboost-thread-dev libgmp-dev libntl-dev libsodium-dev libssl-dev libtool python3
 ```
-On MacOS, this requires [brew](https://brew.sh) to be installed,
-which will be used for all dependencies.
-It will execute [the
+
+On MacOS, this requires High Sierra or later. It uses
+[brew](https://brew.sh) to install the required dependencies. You will
+be offered an automatic download if it is not found.
+
+The following will execute [the
 tutorial](Programs/Source/tutorial.mpc) with two parties and malicious
 security.
 
@@ -89,6 +116,18 @@ docker run --rm -it mpspdz:mascot-party ./Scripts/compile-run.py mascot tutorial
 
 See the [`Dockerfile`](./Dockerfile) for examples of how it can be used.
 
+#### Relevant papers
+
+The protocols in MP-SPDZ are based on numerous papers, and many
+computations will rely on several, ranging from the most basic
+building blocks to higher-level protocols making use of the building
+blocks in a black-box manner. You can have the compiler output links
+to relevant reading with the option `--paper`. Use either of the following:
+```
+./compile.py --papers -E <protocol> <program>
+Scripts/compile-run.py --papers <protocol> <program>
+```
+
 #### Preface
 
 The primary aim of this software is to run the same computation in
@@ -107,7 +146,7 @@ The following table lists all protocols that are fully supported.
 | Covert, dishonest majority | [CowGear / ChaiGear](#secret-sharing) | N/A | N/A | N/A |
 | Semi-honest, dishonest majority | [Semi / Hemi / Temi / Soho](#secret-sharing) | [Semi2k](#secret-sharing) | [SemiBin](#secret-sharing) | [Yao's GC](#yaos-garbled-circuits) / [BMR](#bmr) |
 | Malicious, honest majority | [Shamir / Rep3 / PS / SY](#honest-majority) | [Brain / Rep3 / PS / SY](#honest-majority) | [Rep3 / CCD / PS](#honest-majority) | [BMR](#bmr) |
-| Semi-honest, honest majority | [Shamir / ATLAS / Rep3](#honest-majority) | [Rep3](#honest-majority) | [Rep3 / CCD](#honest-majority) | [BMR](#bmr) |
+| Semi-honest, honest majority | [Shamir / ATLAS / Rep3](#honest-majority) | [Rep3](#honest-majority) / [Astra / Trio](#protocols-with-function-dependent-preprocessing) | [Rep3 / CCD](#honest-majority) | [BMR](#bmr) |
 | Malicious, honest supermajority | [Rep4](#honest-majority) | [Rep4](#honest-majority) | [Rep4](#honest-majority) | N/A |
 | Semi-honest, dealer | [Dealer](#dealer-model) | [Dealer](#dealer-model) | [Dealer](#dealer-model) | N/A |
 
@@ -200,24 +239,6 @@ there are a few things to consider:
       bits via XOR of parties' inputs to generation using the root of a
       random square.
 
-#### Paper and Citation
-
-The design of MP-SPDZ is described in [this
-paper](https://eprint.iacr.org/2020/521). If you use it for an
-academic project, please cite:
-
-```
-@inproceedings{mp-spdz,
-    author = {Marcel Keller},
-    title = {{MP-SPDZ}: A Versatile Framework for Multi-Party Computation},
-    booktitle = {Proceedings of the 2020 ACM SIGSAC Conference on
-    Computer and Communications Security},
-    year = {2020},
-    doi = {10.1145/3372297.3417872},
-    url = {https://doi.org/10.1145/3372297.3417872},
-}
-```
-
 #### History
 
 The software started out as an implementation of [the improved SPDZ
@@ -257,8 +278,8 @@ compute the preprocessing time for a particular computation.
 
 #### Requirements
 
- - GCC 7 or later (tested with up to 14) or LLVM/clang 10 or later
-   (tested with up to 19). The default is to use clang because it performs
+ - GCC 7 or later (tested with up to 14) or LLVM/clang 11 or later
+   (tested with up to 20). The default is to use clang because it performs
    better.
  - For protocols using oblivious transfer, libOTe with [the necessary
    patches](https://github.com/mkskeller/softspoken-implementation)
@@ -368,7 +389,10 @@ There are three ways of running computation:
    user. Otherwise (`//` after the hostname it will be relative to the
    root directory.
 
-   It is assumed that the SSH login is possible without password.
+   It is assumed that the SSH login is possible without password. This
+   can be achieved using password-less SSH keys. See [this
+   tutorial](https://www.digitalocean.com/community/tutorials/how-to-configure-ssh-key-based-authentication-on-a-linux-server)
+   for more information.
 
    Adding the compiler option `-t` (`--tidy_output`) groups the output prints by
    party; however, it delays the outputs until the execution is finished.
@@ -420,7 +444,7 @@ lengths up to 256. For larger primes, you will have to compile with
 `MOD = -DGFP_MOD_SZ=<number of limbs>` in `CONFIG.mine` where the
 number of limbs is the the prime length divided by 64 rounded up.
 
-The precision for fixed- and floating-point computation are not
+The precision for fixed- and floating-point computations are not
 affected by the integer bit length but can be set in the code
 directly. For fixed-point computation this is done via
 `sfix.set_precision()`.
@@ -509,6 +533,15 @@ selected by running the virtual machine with `-B 3`. For smaller
 computation, try `-B 4` or `-B 5`, which set the batch size to ~10,000
 and ~1,000, respectively, at a higher asymptotic cost. `-B 4` is the
 default.
+
+##### Manual conversion
+
+You can switch between arithmetic and binary computation using
+constructors. For arithmetic to binary use `sbitvecint(x, n, m)` where
+`x` is of type `sint`, `n` is the number of bits in the result, and
+`m` is the bit length of the input, that is, `x` is in
+`[0,2**n-1]`. For binary to arithmetic use `sint(x)` where `x` is of
+type `sbitvec` or `sbitvecint`.
 
 #### Bristol Fashion circuits
 
@@ -699,8 +732,9 @@ similar to the one by [Rotaru et
 al.](https://eprint.iacr.org/2019/1300). The main difference is using
 daBits to generate maBits. CowGear and ChaiGear denote covertly
 secure versions of LowGear and HighGear. In all relevant programs,
-option `-T` activates [TopGear](https://eprint.iacr.org/2019/035)
-zero-knowledge proofs in both.
+option `--no-top-gear` disables the improved
+[TopGear](https://eprint.iacr.org/2019/035) zero-knowledge proofs in
+favor of the original variants.
 
 Hemi and Soho denote the stripped version of LowGear and
 HighGear, respectively, for semi-honest
@@ -902,6 +936,48 @@ the number of parties with `-N` and the maximum number of corrupted
 parties with `-T`. The latter can be at most half the number of
 parties.
 
+### Protocols with function-dependent preprocessing
+
+MP-SPDZ implements two honest-majority protocols with
+function-dependent preprocessing,
+[Astra](https://eprint.iacr.org/2019/429) and
+[Trio](https://eprint.iacr.org/2024/386). Both use computation modulo
+a power of two as the arithmetic domain, and they are closely related
+to three-party replicated secret sharing as shown in [this
+paper](https://eprint.iacr.org/2025/919).
+
+There are two virtual machines for either protocol, one for preprocessing
+and one for the online phase: `{astra,trio}-{prep,}-party.x`. You can
+run them separately if your computation does not require
+communicating revealed values back from the online phase to the
+offline phase. Alternatively, you need to run a virtual machine for
+both phases simultaneously while facilitating the transmission of
+information between the phases through named pipes in
+`Player-Data`. `Scripts/{astra,trio}.sh` run both phases with the
+necessary setup. This only works only on Linux as macOS does not seem
+to offer the same functionality for named pipes.
+
+Finally, the virtual machines don't implement mixed multiplications,
+so the compiler has to be configure to produced secret multiplications
+instead. This can be achieved be either running `./compile.py -E
+[astra|trio]` or by placing `program.use_mulm = False` at the
+beginning of the high-level program. You can also use the integrated
+execution, either
+```
+Scripts/compile-run.py [astra|trio] <progname> <args>...
+```
+or
+```
+Scripts/compile-run.py [astra|trio]-prep <progname> <args>...
+Scripts/compile-run.py [astra|trio]-online <progname> <args>...
+```
+Alternatively, compile first and then run the phases separately:
+```
+./compile.py -E [astra|trio] <progname> <args>...
+Scripts/[astra|trio]-prep.sh <progname-with-args>
+Scripts/[astra|trio]-online.sh <progname-with-args>
+```
+
 ## Dealer model
 
 This security model defines a special party that generates correlated
@@ -1077,16 +1153,20 @@ This part has been developed to benchmark ORAM for the [Eurocrypt 2018
 paper](https://eprint.iacr.org/2017/981) by Marcel Keller and Avishay
 Yanay. It only allows to benchmark the data-dependent phase. The
 data-independent and function-independent phases are emulated
-insecurely.
+insecurely. This is implementation is independent of the default
+design, so most of the previous documentation does not apply. In
+particular, you cannot use `compile-run.py`.
 
 By default, the implementations is optimized for two parties. You can
 change this by defining `N_PARTIES` accordingly in `BMR/config.h`. If
 you entirely delete the definition, it will be able to run for any
 number of parties albeit slower.
 
-Compile the virtual machine:
-
-`make -j 8 bmr`
+Compile the virtual machine enabling insecure functionality:
+```
+echo MY_CFLAGS += -DINSECURE >> CONFIG.mine
+make -j 8 bmr
+```
 
 After compiling the mpc file:
 
@@ -1104,7 +1184,14 @@ Circuit ORAM or linear scan without ORAM.
 2) Run `./compile.py -G -D gc_oram`. The `-D` argument instructs the
 compiler to remove dead code. This is useful for more complex programs
 such as this one.
-3) Run `gc_oram` in the virtual machines as explained above.
+3) Run `gc_oram` in the virtual machines as explained above, for
+example: `Scripts/bmr-program-run.sh gc_oram 2`.
+
+This only works with the partially insecure BMR implementation, so you
+cannot use any other protocol with it including Yao or any full BMR
+implementation. See [the
+documentation](https://mp-spdz.readthedocs.io/en/latest/Compiler.html#module-Compiler.oram)
+on how to use ORAM in all other protocols.
 
 ## Preprocessing as required
 

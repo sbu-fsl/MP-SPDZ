@@ -28,7 +28,7 @@ using namespace std;
 #define CONNECTION_TIMEOUT 60
 #endif
 
-void error(const char *str, bool interrupted = false);
+void error(const char *str, bool interrupted = false, size_t length = 0);
 
 void set_up_client_socket(int& mysocket,const char* hostname,int Portnum);
 void close_client_socket(int socket);
@@ -110,7 +110,7 @@ inline void receive(int socket,octet *msg,size_t len)
                 }
             }
           else
-            { error("Receiving error", true); }
+            { error("Receiving error", true, len - i); }
         }
       else
         throw closed_connection();

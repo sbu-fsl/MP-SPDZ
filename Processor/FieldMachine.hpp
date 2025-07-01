@@ -52,7 +52,9 @@ FieldMachine<T, V, W, X>::FieldMachine(int argc, const char** argv,
 #undef X
     default:
         cerr << "Not compiled for " << online_opts.prime_length() << "-bit primes" << endl;
-        cerr << "Compile with -DGFP_MOD_SZ=" << n_limbs << endl;
+        cerr << "Put 'MOD = -DGFP_MOD_SZ=" << n_limbs
+                << "' in CONFIG.mine and run " << "'make " << argv[0] << "'"
+                << endl;
         exit(1);
     }
 }

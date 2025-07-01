@@ -70,6 +70,9 @@ class Program
 
   template<class sint, class sgf2n>
   void execute_with_errors(Processor<sint, sgf2n>& Proc) const;
+
+  template<class T>
+  void mulm_check() const;
 };
 
 #endif

@@ -1,6 +1,7 @@
 #include "Rq_Element.h"
 #include "FHE_Keys.h"
 #include "Tools/Exceptions.h"
+#include "Tools/CodeLocations.h"
 
 #include "Math/modp.hpp"
 
@@ -139,6 +140,8 @@ vector<bigint> Rq_Element::to_vec_bigint() const
 // result mod p0 = a[0]; result mod p1 = a[1]
 void Rq_Element::to_vec_bigint(vector<bigint>& v) const
 {
+  CODE_LOCATION
+
   a[0].to_vec_bigint(v);
   if (n_mults() == 0) {
 	  bigint p0 = a[0].get_prime();
@@ -204,6 +207,9 @@ void Rq_Element::change_rep(RepType r0,RepType r1)
 void Rq_Element::Scale(const bigint& p)
 {
   if (lev==0) { return; }
+
+  CODE_LOCATION
+
   if (n_mults() == 0) {
 	  //for some reason we scale but we have just one level
 	  throw level_mismatch();

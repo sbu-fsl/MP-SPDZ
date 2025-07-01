@@ -10,6 +10,7 @@
 #include "HonestMajorityMachine.h"
 #include "Tools/ezOptionParser.h"
 #include "Math/gfp.h"
+#include "Protocols/MascotPrep.h"
 
 #include "OnlineOptions.hpp"
 
@@ -39,7 +40,7 @@ public:
             ez::ezOptionParser& opt, bool live_prep_default = true)
     {
         OnlineOptions& online_opts = OnlineOptions::singleton;
-        online_opts = {opt, argc, argv, T<gfp0>(), live_prep_default};
+        online_opts = {opt, argc, argv, T<gfp0>(), live_prep_default, W()};
 
         FieldMachine<T, V, X, W>(argc, argv, opt, online_opts);
     }

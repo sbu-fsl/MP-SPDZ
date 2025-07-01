@@ -59,6 +59,7 @@ template <class FD>
 void Multiplier<FD>::add(Plaintext_<FD>& res, const Ciphertext& c,
         OT_ROLE role, int)
 {
+    CODE_LOCATION
     o.reset_write_head();
 
     if (role & SENDER)

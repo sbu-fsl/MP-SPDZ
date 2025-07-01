@@ -16,7 +16,7 @@ DealerInput<T>::DealerInput(SubProcessor<T>& proc, typename T::MAC_Check&) :
 
 template<class T>
 DealerInput<T>::DealerInput(typename T::MAC_Check&, Preprocessing<T>&,
-        Player& P) :
+        Player& P, typename T::Protocol*) :
         DealerInput(P)
 {
 }
@@ -95,6 +95,7 @@ void DealerInput<T>::add_other(int player, int)
 template<class T>
 void DealerInput<T>::exchange()
 {
+    CODE_LOCATION
     if (from_dealer)
     {
         vector<bool> senders(P.num_players());

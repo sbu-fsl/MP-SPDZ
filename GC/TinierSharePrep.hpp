@@ -72,6 +72,7 @@ void TinierSharePrep<T>::buffer_triples()
 template<class T>
 void TinierSharePrep<T>::buffer_inputs(int player)
 {
+    CODE_LOCATION
     auto& inputs = this->inputs;
     assert(triple_generator);
     triple_generator->generateInputs(player);

@@ -3,11 +3,14 @@
 #include "Math/Setup.h"
 #include "Math/fixint.h"
 #include "Processor/OnlineOptions.h"
+#include "Tools/CodeLocations.h"
 #include <fstream>
 
 
 void P2Data::forward(vector<poly_type>& ans,const vector<gf2n_short>& a) const
 {
+  CODE_LOCATION
+
   int n=gf2n_short::degree();
   
   BitVector bv(A.size());
@@ -29,6 +32,8 @@ void P2Data::forward(vector<poly_type>& ans,const vector<gf2n_short>& a) const
 
 void P2Data::backward(vector<gf2n_short>& ans,const vector<poly_type>& a) const
 {
+  CODE_LOCATION
+
   int n=gf2n_short::degree();
   BitVector bv(a.size());
   for (size_t i = 0; i < a.size(); i++)

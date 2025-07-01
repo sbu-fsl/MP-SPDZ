@@ -64,6 +64,7 @@ void Atlas<T>::prepare(const typename T::open_type& product)
 template<class T>
 void Atlas<T>::exchange()
 {
+    CODE_LOCATION
     P.send_receive_all(oss2, oss);
     oss.mine = oss2.mine;
 

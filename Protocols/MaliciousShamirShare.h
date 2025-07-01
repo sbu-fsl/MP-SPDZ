@@ -54,6 +54,11 @@ public:
         return "M" + super::type_short();
     }
 
+    static string alt()
+    {
+        return "";
+    }
+
     MaliciousShamirShare()
     {
     }

@@ -25,6 +25,7 @@
 #include <fstream>
 
 class ProcessorBase;
+template<class T> class NoProtocol;
 
 namespace GC
 {
@@ -65,7 +66,11 @@ public:
 
     typedef typename T::out_type out_type;
 
+    typedef int MAC_Check;
+    typedef int mac_key_type;
     typedef void DefaultMC;
+    typedef void MC;
+    typedef NoProtocol<Secret> Protocol;
 
     static string type_string() { return "evaluation secret"; }
     static string phase_name() { return T::name(); }
@@ -79,6 +84,8 @@ public:
     static const bool actual_inputs = T::actual_inputs;
 
     static const bool symmetric = true;
+
+    static const bool garbled = T::garbled;
 
     static bool real_shares(const Player&) { return true; }
 
@@ -194,9 +201,16 @@ template <class T>
 int Secret<T>::default_length = 64;
 
 template <class T>
-inline ostream& operator<<(ostream& o, Secret<T>& secret)
+inline ostream& operator<<(ostream& o, const Secret<T>& secret)
 {
-	o << "(" << secret.size() << " secret bits)";
+	o << "(";
+	for (int i = 0; i < secret.size(); i++)
+	{
+	    o << secret.get_reg(i);
+	    if (i != secret.size() - 1)
+	        o << ", ";
+	}
+	o << ")";
 	return o;
 }
 

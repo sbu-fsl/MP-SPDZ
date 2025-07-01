@@ -113,7 +113,7 @@ octetStream check_file_signature(ifstream& file, const string& filename)
             pprint_bytes("found   ", file_spec.get_data(), file_spec.get_length());
             pprint_bytes("expected", exp.get_data(), exp.get_length());
         }
-        throw signature_mismatch(filename);
+        throw signature_mismatch(filename, T::has_mac);
     }
     return file_spec;
 }

@@ -110,7 +110,8 @@ public:
             Player* P);
 
     void print_reg(int reg, int n, int size);
-    void print_reg_plain(Clear& value);
+    template<class U>
+    void print_reg_plain(U& value);
     void print_reg_signed(unsigned n_bits, Integer value);
     void print_chr(int n);
     void print_str(int n);

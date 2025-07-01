@@ -102,11 +102,14 @@ public:
 	Z2(const Z2<L>& x) : Z2()
 	{ avx_memcpy(a, x.a, min(N_BYTES, x.N_BYTES)); normalize(); }
 
+	Z2(PRNG& G);
+
 	void normalize() { a[N_WORDS - 1] &= UPPER_MASK; }
+	void normalize_byte() { if (N_BITS % 8) normalize(); }
 
 	void assign_zero() { avx_memzero(a, sizeof(a)); }
 	void assign_one()  { assign_zero(); a[0] = 1; }
-	void assign(const void* buffer) { avx_memcpy(a, buffer, N_BYTES); normalize(); }
+	void assign(const void* buffer) { avx_memcpy(a, buffer, N_BYTES); normalize_byte(); }
 	void assign(int x) { *this = x; }
 
 	/**
@@ -148,10 +151,13 @@ public:
 	Z2<K>& operator<<=(int other);
 	Z2<K>& operator>>=(int other);
 
-	Z2<K> operator<<(int i) const;
-	Z2<K> operator>>(int i) const;
+	Z2<K> operator<<(unsigned long i) const;
+	Z2<K> operator>>(unsigned long i) const;
 	Z2<K> operator<<(const Z2<K>& i) const { return *this << i.a[0]; }
 	Z2<K> operator>>(const Z2<K>& i) const { return *this >> i.a[0]; }
+
+	SignedZ2<K> signed_rshift(int i) const;
+	Z2<K> cheap_lshift(unsigned i) const;
 
 	bool operator==(const Z2<K>& other) const;
 	bool operator!=(const Z2<K>& other) const { return not (*this == other); }
@@ -170,6 +176,12 @@ public:
 	bool is_zero() const { return *this == Z2<K>(); }
 	bool is_one() const { return *this == 1; }
 	bool is_bit() const { return is_zero() or is_one(); }
+
+	bool msb() const
+	{
+        return this->a[this->N_WORDS - 1]
+                & 1ll << ((K - 1) % (8 * sizeof(mp_limb_t)));
+	}
 
 	/**
 	 * Sample with uniform distribution.
@@ -262,7 +274,7 @@ public:
 
     bool negative() const
     {
-        return this->a[this->N_WORDS - 1] & 1ll << ((K - 1) % (8 * sizeof(mp_limb_t)));
+        return this->msb();
     }
 
     bool operator<(const SignedZ2& other) const
@@ -402,10 +414,10 @@ inline Z2<K> Z2<K>::lazy_mul(const Z2<K>& other) const
 }
 
 template <int K>
-Z2<K> Z2<K>::operator<<(int i) const
+Z2<K> Z2<K>::operator<<(unsigned long i) const
 {
 	Z2<K> res;
-	int n_limb_shift = i / N_LIMB_BITS;
+	auto n_limb_shift = i / N_LIMB_BITS;
 	for (int j = n_limb_shift; j < N_WORDS; j++)
 		res.a[j] = a[j - n_limb_shift];
 	int n_inside_shift = i % N_LIMB_BITS;
@@ -418,12 +430,21 @@ Z2<K> Z2<K>::operator<<(int i) const
 	return res;
 }
 
+template<int K>
+Z2<K> Z2<K>::cheap_lshift(unsigned i) const
+{
+    if (N_WORDS == 1)
+        return a[0] << i;
+    else
+        return *this << i;
+}
+
 template <int K>
-Z2<K> Z2<K>::operator>>(int i) const
+Z2<K> Z2<K>::operator>>(unsigned long i) const
 {
 	Z2<K> res;
-	int n_limb_shift = i / N_LIMB_BITS;
-	for (int j = 0; j < N_WORDS - n_limb_shift; j++)
+	auto n_limb_shift = i / N_LIMB_BITS;
+	for (unsigned long j = 0; j < N_WORDS - n_limb_shift; j++)
 		res.a[j] = a[j + n_limb_shift];
 	int n_inside_shift = i % N_LIMB_BITS;
 	if (N_WORDS == 1)
@@ -434,11 +455,26 @@ Z2<K> Z2<K>::operator>>(int i) const
 }
 
 template<int K>
+SignedZ2<K> Z2<K>::signed_rshift(int i) const
+{
+    if (SignedZ2<K>(*this).negative())
+        return -SignedZ2<K>(-SignedZ2<K>(*this + 1) >> i);
+    else
+        return *this >> i;
+}
+
+template<int K>
+Z2<K>::Z2(PRNG& G)
+{
+	randomize(G);
+}
+
+template<int K>
 void Z2<K>::randomize(PRNG& G, int n)
 {
 	(void) n;
 	G.get_octets<N_BYTES>((octet*)a);
-	normalize();
+	normalize_byte();
 }
 
 template<int K>

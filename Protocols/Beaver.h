@@ -12,6 +12,7 @@ using namespace std;
 
 #include "Replicated.h"
 #include "Processor/Data_Files.h"
+#include "Tools/CodeLocations.h"
 
 template<class T> class SubProcessor;
 template<class T> class MAC_Check_Base;

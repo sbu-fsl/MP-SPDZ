@@ -6,6 +6,7 @@
 #include "GC/square64.h"
 #include "SpecificPrivateOutput.h"
 #include "Conv2dTuple.h"
+#include "Protocols/Replicated.h"
 
 #include "Processor/ProcessorBase.hpp"
 #include "GC/Processor.hpp"
@@ -111,6 +112,9 @@ Processor<sint, sgf2n>::Processor(int thread_num,Player& P,
 
   secure_prng.ReSeed();
   shared_prng.SeedGlobally(P, false);
+  vector<IntBase<octet>> seed(shared_prng.get_seed(), shared_prng.get_seed() + SEED_SIZE);
+  Procp.protocol.forward_sync(seed);
+  shared_prng.SetSeed((octet*) seed.data());
 
   setup_redirection(P.my_num(), thread_num, opts, out, sint::real_shares(P));
   Procb.out = out;
@@ -192,10 +196,11 @@ void Processor<sint, sgf2n>::dabit(const Instruction& instruction)
   {
     Procb.S[instruction.get_r(1) + i] = {};
   }
+  auto a = Procp.get_S().iterator_for_size(instruction.get_r(0), size);
   for (int i = 0; i < size; i++)
   {
     typename sint::bit_type tmp;
-    Procp.DataF.get_dabit(Procp.get_S_ref(instruction.get_r(0) + i), tmp);
+    Procp.DataF.get_dabit(*a++, tmp);
     Procb.S[instruction.get_r(1) + i / unit] ^= tmp << (i % unit);
   }
 }
@@ -246,6 +251,12 @@ void Processor<sint, sgf2n>::split(const Instruction& instruction)
   assert(share_thread.protocol != 0);
   sint::split(Procb.S, instruction.get_start(), n_bits,
       &read_Sp(instruction.get_r(0)), n_inputs, *share_thread.protocol);
+}
+
+template<class sint, class sgf2n>
+void Processor<sint, sgf2n>::unsplit(const Instruction& instruction)
+{
+  Procp.protocol.unsplit(Procp.S, Procb.S, instruction);
 }
 
 
@@ -487,25 +498,25 @@ template<class T>
 void SubProcessor<T>::muls(const vector<int>& reg)
 {
     assert(reg.size() % 4 == 0);
-    int n = reg.size() / 4;
 
     SubProcessor<T>& proc = *this;
     protocol.init_mul();
-    for (int i = 0; i < n; i++)
-        for (int j = 0; j < reg[4 * i]; j++)
-        {
-            auto& x = proc.S[reg[4 * i + 2] + j];
-            auto& y = proc.S[reg[4 * i + 3] + j];
-            protocol.prepare_mul(x, y);
-        }
-    protocol.exchange();
-    for (int i = 0; i < n; i++)
+    for (auto it = reg.begin(); it < reg.end(); it += 4)
     {
-        for (int j = 0; j < reg[4 * i]; j++)
-        {
-            proc.S[reg[4 * i + 1] + j] = protocol.finalize_mul();
-        }
-        protocol.counter += reg[4 * i];
+        for (int j = 1; j < 4; j++)
+            assert(proc.S.begin() + *(it + j) <= proc.S.end());
+        auto x = proc.S.begin() + *(it + 2);
+        auto y = proc.S.begin() + *(it + 3);
+        for (int j = 0; j < *it; j++)
+            protocol.prepare_mul(*x++, *y++);
+    }
+    protocol.exchange();
+    for (auto it = reg.begin(); it < reg.end(); it += 4)
+    {
+        auto z = proc.S.begin() + *(it + 1);
+        for (int j = 0; j < *it; j++)
+            *z++ = protocol.finalize_mul();
+        protocol.counter += *it;
     }
 
     maybe_check();
@@ -946,7 +957,7 @@ void SubProcessor<T>::input_personal(const vector<int>& args)
 {
   input.reset_all(P);
   for (size_t i = 0; i < args.size(); i += 4)
-    if (args[i + 1] == P.my_num())
+    if (input.is_me(args[i + 1]))
       {
         auto begin = C.begin() + args[i + 3];
         auto end = begin + args[i];
@@ -1047,8 +1058,14 @@ void Processor<sint, sgf2n>::fixinput(const Instruction& instruction)
         throw runtime_error("unknown format for fixed-point input");
       }
 
+      if (not sint::real_shares(P))
+        return;
+
       if (binary_input.fail())
-        throw IO_Error("failure reading from " + binary_input_filename);
+        throw IO_Error(
+            "Failure reading from " + binary_input_filename
+                + ". You might need to copy it "
+                + "from the location of compilation.");
 
       if (binary_input.peek() == EOF)
         throw IO_Error("not enough inputs in " + binary_input_filename);
@@ -1084,15 +1101,16 @@ void Processor<sint, sgf2n>::fixinput(const Instruction& instruction)
 }
 
 template<class sint, class sgf2n>
-long Processor<sint, sgf2n>::sync(long x) const
+long Processor<sint, sgf2n>::sync(long x)
 {
   vector<Integer> tmp = {x};
-  ::sync<sint>(tmp, P);
+  Procp.protocol.sync(tmp, P);
   return tmp[0].get();
 }
 
 template<class sint>
-void sync(vector<Integer>& x, Player& P)
+template<class U>
+void ProtocolBase<sint>::sync(vector<U>& x, Player& P)
 {
   if (not sint::symmetric)
     {

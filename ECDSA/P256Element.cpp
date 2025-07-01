@@ -16,17 +16,21 @@ void P256Element::init(int nid)
     assert(curve != 0);
     auto modulus = EC_GROUP_get0_order(curve);
     auto mod = BN_bn2dec(modulus);
+    Scalar::get_ZpD() = {};
     Scalar::init_field(mod, false);
     free(mod);
 }
 
 void P256Element::finish()
 {
+    assert(curve);
     EC_GROUP_free(curve);
+    curve = 0;
 }
 
 P256Element::P256Element()
 {
+    assert(curve);
     point = EC_POINT_new(curve);
     assert(point != 0);
     assert(EC_POINT_set_to_infinity(curve, point) != 0);

@@ -16,6 +16,7 @@ class TimerWithComm : public Timer
 public:
     TimerWithComm();
     TimerWithComm(const Timer& other);
+    TimerWithComm(double time);
 
     void start(const NamedCommStats& stats = {});
     void stop(const NamedCommStats& stats = {});

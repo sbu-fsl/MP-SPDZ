@@ -14,6 +14,11 @@ TimerWithComm::TimerWithComm(const Timer& other) :
 {
 }
 
+TimerWithComm::TimerWithComm(double time) :
+        Timer(time)
+{
+}
+
 void TimerWithComm::start(const NamedCommStats& stats)
 {
     Timer::start();

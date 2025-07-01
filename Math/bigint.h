@@ -75,21 +75,25 @@ public:
   template <int K>
   bigint(const SignedZ2<K>& x);
   template <int L>
-  bigint(const fixint<L>& x) : bigint(typename fixint<L>::super(x)) {}
+  bigint(const fixint<L>& x);
   bigint(const Integer& x);
   bigint(const GC::Clear& x);
   bigint(const mp_limb_t* data, size_t n_limbs);
 
-  bigint& operator=(int n);
-  bigint& operator=(long n);
-  bigint& operator=(word n);
-  bigint& operator=(double f);
+  template<class T>
+  bigint& operator=(const T& x);
   template<int X, int L>
   bigint& operator=(const gfp_<X, L>& other);
+  template<int X, int L>
+  bigint& operator=(const gfpvar_<X, L>& other);
   template<int K>
   bigint& operator=(const Z2<K>& x);
   template<int K>
   bigint& operator=(const SignedZ2<K>& x);
+  template <int L>
+  bigint& operator=(const fixint<L>& x);
+  bigint& operator=(const Integer& x);
+  bigint& operator=(const GC::Clear& x);
 
   /// Convert to signed representation in :math:`[-p/2,p/2]`.
   template<int X, int L>
@@ -141,27 +145,10 @@ void inline_mpn_zero(mp_limb_t* x, mp_size_t size);
 void inline_mpn_copyi(mp_limb_t* dest, const mp_limb_t* src, mp_size_t size);
 
 
-inline bigint& bigint::operator=(int n)
+template<class T>
+inline bigint& bigint::operator=(const T& x)
 {
-  mpz_class::operator=(n);
-  return *this;
-}
-
-inline bigint& bigint::operator=(long n)
-{
-  mpz_class::operator=(n);
-  return *this;
-}
-
-inline bigint& bigint::operator=(word n)
-{
-  mpz_class::operator=(n);
-  return *this;
-}
-
-inline bigint& bigint::operator=(double f)
-{
-  mpz_class::operator=(f);
+  mpz_class::operator=(x);
   return *this;
 }
 
@@ -206,7 +193,14 @@ bigint::bigint(const gfp_<X, L>& x)
 template<int X, int L>
 bigint::bigint(const gfpvar_<X, L>& other)
 {
+  *this = other;
+}
+
+template<int X, int L>
+bigint& bigint::operator=(const gfpvar_<X, L>& other)
+{
   to_bigint(*this, other.get(), other.get_ZpD());
+  return *this;
 }
 
 template<int X, int L>
@@ -226,6 +220,18 @@ template<class T>
 void to_gfp(T& res, const bigint& a)
 {
   res = a;
+}
+
+template<int L>
+bigint::bigint(const fixint<L>& x)
+{
+  *this = x;
+}
+
+template<int L>
+bigint& bigint::operator =(const fixint<L>& x)
+{
+  return *this = typename fixint<L>::super(x);
 }
 
 string to_string(const bigint& x);

@@ -1,6 +1,7 @@
 #include "Ciphertext.h"
 #include "P2Data.h"
 #include "Tools/Exceptions.h"
+#include "Tools/CodeLocations.h"
 
 #include "Math/modp.hpp"
 
@@ -59,6 +60,8 @@ void sub(Ciphertext& ans,const Ciphertext& c0,const Ciphertext& c1)
 void mul(Ciphertext& ans,const Ciphertext& c0,const Ciphertext& c1,
          const FHE_PK& pk)
 {
+  CODE_LOCATION
+
   if (c0.params!=c1.params)  { throw params_mismatch(); }
   if (ans.params!=c1.params) { throw params_mismatch(); }
 

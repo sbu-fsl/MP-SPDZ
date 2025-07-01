@@ -89,6 +89,12 @@ if test $dabit != 0; then
     test_vm semi2k $run_opts
 fi
 
+if test `uname` != Darwin -a -z "$run_opts"; then
+    ./compile.py -E astra tutorial
+    test_vm astra $run_opts
+    test_vm trio $run_opts
+fi
+
 ./compile.py tutorial
 
 if test $no_top_gear; then

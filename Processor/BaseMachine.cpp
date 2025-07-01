@@ -18,6 +18,7 @@ using namespace std;
 BaseMachine* BaseMachine::singleton = 0;
 thread_local int BaseMachine::thread_num;
 thread_local OnDemandOTTripleSetup BaseMachine::ot_setup;
+thread_local const Program* BaseMachine::program = 0;
 
 void print_usage(ostream& o, const char* name, size_t capacity)
 {
@@ -38,11 +39,19 @@ bool BaseMachine::has_program()
   return has_singleton() and not s().progs.empty();
 }
 
+DataPositions BaseMachine::get_offline_data_used()
+{
+  if (program)
+    return program->get_offline_data_used();
+  else
+    return s().progs[0].get_offline_data_used();
+}
+
 int BaseMachine::edabit_bucket_size(int n_bits)
 {
   size_t usage = 0;
   if (has_program())
-    usage = s().progs[0].get_offline_data_used().total_edabits(n_bits);
+    usage = get_offline_data_used().total_edabits(n_bits);
   return bucket_size(usage);
 }
 
@@ -50,7 +59,7 @@ int BaseMachine::triple_bucket_size(DataFieldType type)
 {
   size_t usage = 0;
   if (has_program())
-    usage = s().progs[0].get_offline_data_used().files[type][DATA_TRIPLE];
+    usage = get_offline_data_used().files[type][DATA_TRIPLE];
   return bucket_size(usage);
 }
 
@@ -83,7 +92,7 @@ int BaseMachine::matrix_requirement(int n_rows, int n_inner, int n_cols)
 {
   if (has_program())
     {
-      auto res = s().progs[0].get_offline_data_used().matmuls[
+      auto res = get_offline_data_used().matmuls[
           {n_rows, n_inner, n_cols}];
       if (res)
         return res;
@@ -95,7 +104,7 @@ int BaseMachine::matrix_requirement(int n_rows, int n_inner, int n_cols)
 }
 
 BaseMachine::BaseMachine() :
-    nthreads(0), multithread(false)
+    nthreads(0), multithread(false), nan_warning(0)
 {
   if (sodium_init() == -1)
     throw runtime_error("couldn't initialize libsodium");
@@ -172,6 +181,7 @@ void BaseMachine::load_schedule(const string& progname, bool load_bytecode)
   getline(inpf, domain);
   getline(inpf, relevant_opts);
   getline(inpf, security);
+  getline(inpf, gf2n);
   inpf.close();
 }
 
@@ -266,6 +276,15 @@ int BaseMachine::prime_length_from_schedule(string progname)
     return 0;
 }
 
+int BaseMachine::gf2n_length_from_schedule(string progname)
+{
+  string domain = get_basics(progname).gf2n;
+  if (domain.substr(0, 4).compare("lg2:") == 0)
+    return stoi(domain.substr(4));
+  else
+    return 0;
+}
+
 bigint BaseMachine::prime_from_schedule(string progname)
 {
   string domain = get_domain(progname);
@@ -286,10 +305,7 @@ int BaseMachine::security_from_schedule(string progname)
 
 NamedCommStats BaseMachine::total_comm()
 {
-  NamedCommStats res;
-  for (auto& queue : queues)
-    res += queue->get_comm_stats();
-  return res;
+  return queues.total_comm();
 }
 
 void BaseMachine::set_thread_comm(const NamedCommStats& stats)

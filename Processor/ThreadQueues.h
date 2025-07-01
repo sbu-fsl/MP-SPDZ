@@ -28,6 +28,9 @@ public:
     TimerWithComm sum(const string& phase);
 
     void print_breakdown();
+
+    NamedCommStats total_comm();
+    NamedCommStats max_comm();
 };
 
 #endif /* PROCESSOR_THREADQUEUES_H_ */

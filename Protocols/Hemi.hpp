@@ -107,6 +107,7 @@ template<class T>
 void Hemi<T>::matmulsm(SubProcessor<T>& processor, MemoryPart<T>& source,
         const Instruction& instruction)
 {
+    CODE_LOCATION
     auto& dim = instruction.get_start();
 
     vector<int> plain_args, complex_args;
@@ -187,6 +188,7 @@ template<class T>
 ShareMatrix<T> Hemi<T>::matrix_multiply(const ShareMatrix<T>& A,
         const ShareMatrix<T>& B, SubProcessor<T>& processor)
 {
+    CODE_LOCATION
     if (mc == 0)
     {
         mc = new MatrixMC<T>(processor.MC);
@@ -280,6 +282,7 @@ array<int, 3> Conv2dTuple::matrix_dimensions()
 template<class T>
 void Conv2dTuple::run_matrix(SubProcessor<T>& processor)
 {
+    CODE_LOCATION
     auto& S = processor.get_S();
     array<int, 3> dim = matrix_dimensions();
     ShareMatrix<T> A(dim[0], dim[1]), B(dim[1], dim[2]);

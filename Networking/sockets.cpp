@@ -8,7 +8,7 @@
 #include <fcntl.h>
 using namespace std;
 
-void error(const char *str, bool interrupted)
+void error(const char *str, bool interrupted, size_t length)
 {
   int old_errno = errno;
   char err[1000];
@@ -16,6 +16,8 @@ void error(const char *str, bool interrupted)
   err[999] = 0;
   string message = string() + "Fatal communication error on " + err + ": "
       + str + " (" + strerror(old_errno) + ")";
+  if (length)
+    message += " when sending " + to_string(length) + " bytes";
   if (interrupted)
     message += "\nThis is probably because another party encountered a problem.";
   exit_error(message);
@@ -105,9 +107,9 @@ void set_up_client_socket(int& mysocket,const char* hostname,int Portnum)
          }
        errno = connect_errno;
    }
-   while (fl == -1
-       && (errno == ECONNREFUSED || errno == ETIMEDOUT || errno == EINPROGRESS)
-       && timer.elapsed() < CONNECTION_TIMEOUT);
+   while (fl == -1 &&
+    (errno == ECONNREFUSED || errno == ETIMEDOUT || errno == EINPROGRESS || errno == ECONNRESET) &&
+    timer.elapsed() < CONNECTION_TIMEOUT);
 
    if (fl < 0)
      {
@@ -121,6 +123,9 @@ void set_up_client_socket(int& mysocket,const char* hostname,int Portnum)
      }
 
    freeaddrinfo(ai);
+
+   if (OnlineOptions::singleton.has_option("time_connect"))
+     cerr << "Connection took " << timer.elapsed() << " seconds." << endl;
 
   /* disable Nagle's algorithm */
   int one=1;

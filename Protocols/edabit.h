@@ -128,6 +128,18 @@ public:
         for (int i = 0; i < length; i++)
             b[i].output(s, false);
     }
+
+    void pack(octetStream& os) const
+    {
+        a.pack(os);
+        b.pack(os);
+    }
+
+    void unpack(octetStream os)
+    {
+        a.unpack(os);
+        b.unpack(os);
+    }
 };
 
 #endif /* PROTOCOLS_EDABIT_H_ */

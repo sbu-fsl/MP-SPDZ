@@ -53,13 +53,6 @@ class Rep4 : public ProtocolBase<T>
 
     int get_player(int offset);
 
-    template<int>
-    void trunc_pr(const vector<int>& regs, int size, SubProcessor<T>& proc,
-            true_type);
-    template<int>
-    void trunc_pr(const vector<int>& regs, int size, SubProcessor<T>& proc,
-            false_type);
-
     template<int = 0>
     T finalize_mul(int n_bits, true_type);
     template<int = 0>
@@ -93,7 +86,12 @@ public:
     T get_random();
     void randoms(T& res, int n_bits);
 
-    void trunc_pr(const vector<int>& regs, int size, SubProcessor<T>& proc);
+    template<int = 0>
+    void trunc_pr(const vector<int>& regs, int size, SubProcessor<T>& proc,
+            true_type);
+    template<int = 0>
+    void trunc_pr(const vector<int>& regs, int size, SubProcessor<T>& proc,
+            false_type);
 
     template<class U>
     void split(StackedVector<T>& dest, const vector<int>& regs, int n_bits,

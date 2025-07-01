@@ -18,6 +18,7 @@ right order.
 import itertools
 import operator
 import math
+import re
 from . import tools
 from random import randint
 from functools import reduce
@@ -1363,6 +1364,21 @@ class randomfulls(base.DataInstruction):
     def get_repeat(self):
         return len(self.args)
 
+class unsplit(base.VectorInstruction, base.Ciscable):
+    __slots__ = []
+    code = base.opcodes['UNSPLIT']
+    arg_format = tools.chain(['sb'], itertools.repeat('sw'))
+    vector_index = 1
+
+    def add_usage(self, req_node):
+        n = len(self.args) - 1
+        if n == 1:
+            name = 'bit2A'
+        else:
+            name = '%d-way unsplit' % n
+        req_node.increment(('modp', name), len(self.args[1]))
+        req_node.increment(('modp', '%s round' % name), 1)
+
 @base.gf2n
 @base.vectorize
 class square(base.DataInstruction):
@@ -1448,7 +1464,8 @@ class prep(base.Instruction):
     field_type = 'modp'
 
     def add_usage(self, req_node):
-        req_node.increment((self.field_type, self.args[0]), self.get_size())
+        req_node.increment((self.field_type, 'prep', self.args[0]),
+                           self.get_size())
 
     def has_var_args(self):
         return True
@@ -2354,12 +2371,13 @@ class convmodp(base.Instruction):
 
     :param: destination (regint)
     :param: source (cint)
+    :param: synchronize (int)
     :param: bit length (int)
 
     """
     __slots__ =  []
     code = base.opcodes['CONVMODP']
-    arg_format = ['ciw', 'c', 'int']
+    arg_format = ['ciw', 'c', 'int', 'int']
     def __init__(self, *args, **kwargs):
         if len(args) == len(self.arg_format):
             super(convmodp_class, self).__init__(*args)
@@ -2407,8 +2425,14 @@ class asm_open(base.VarArgsInstruction, base.DataInstruction):
         self.args[0] |= other.args[0]
         self.args += other.args[1:]
 
+class mul_base(base.VarArgsInstruction, base.DataInstruction):
+    def add_usage(self, req_node):
+        super(mul_base, self).add_usage(req_node)
+        req_node.increment((self.field_type, 'simple multiplication'),
+                           self.get_repeat() * self.get_size())
+
 @base.gf2n
-class muls(base.VarArgsInstruction, base.DataInstruction, base.Ciscable):
+class muls(mul_base, base.Ciscable):
     """ (Element-wise) multiplication of secret registers (vectors).
 
     :param: number of arguments to follow (multiple of four)
@@ -2459,7 +2483,7 @@ except NameError:
     pass
 
 @base.gf2n
-class mulrs(base.VarArgsInstruction, base.DataInstruction):
+class mulrs(mul_base):
     """ Constant-vector multiplication of secret registers.
 
     :param: number of arguments to follow (multiple of four)
@@ -2532,10 +2556,6 @@ class dotprods(base.VarArgsInstruction, base.DataInstruction,
                 yield 's' + field
             yield 'int'
 
-    @property
-    def gf2n_arg_format(self):
-        return self.arg_format()
-
     def get_repeat(self):
         return sum(self.args[i] // 2 - 1
                    for i, n in self.bases(iter(self.args)))
@@ -2555,6 +2575,7 @@ class matmul_base(base.DataInstruction):
     def get_repeat(self):
         return reduce(operator.mul, self.args[3:6])
 
+@base.gf2n
 class matmuls(matmul_base, base.Mergeable):
     """ Secret matrix multiplication from registers. All matrices are
     represented as vectors in row-first order.
@@ -2567,12 +2588,21 @@ class matmuls(matmul_base, base.Mergeable):
     :param: number of columns in second factor and result (int)
     """
     code = base.opcodes['MATMULS']
-    arg_format = itertools.cycle(['sw','s','s','int','int','int'])
+    arg_format = tools.cycle(['sw','s','s','int','int','int'])
 
     def get_repeat(self):
         return sum(reduce(operator.mul, self.args[i + 3:i + 6])
                    for i in range(0, len(self.args), 6))
 
+    def add_usage(self, req_node):
+        super(matmuls_class, self).add_usage(req_node)
+        for i in range(0, len(self.args), 6):
+            req_node.increment(('matmul', (self.args[i + 3], self.args[i + 4],
+                                           self.args[i + 5])), 1)
+            req_node.increment(('modp', 'dot product'),
+                               self.args[i + 3] * self.args[i + 5])
+
+@base.gf2n
 class matmulsm(matmul_base, base.Mergeable):
     """ Secret matrix multiplication reading directly from memory.
 
@@ -2590,8 +2620,8 @@ class matmulsm(matmul_base, base.Mergeable):
     :param: total number of columns in the second factor, equal to used number of columns when all columns are used (int)
     """
     code = base.opcodes['MATMULSM']
-    arg_format = itertools.cycle(['sw','ci','ci','int','int','int','ci','ci','ci','ci',
-                                  'int','int'])
+    arg_format = tools.cycle(['sw','ci','ci','int','int','int','ci','ci','ci','ci',
+                              'int','int'])
 
     def __init__(self, *args,
                  first_factor_base_addresses=None,
@@ -2616,9 +2646,11 @@ class matmulsm(matmul_base, base.Mergeable):
                 assert len(indices_values) == 4 * len(first_factor_base_addresses)
 
     def add_usage(self, req_node):
-        super(matmulsm, self).add_usage(req_node)
+        super(matmulsm_class, self).add_usage(req_node)
         for i in range(0, len(self.args), 12):
             req_node.increment(('matmul', (self.args[i + 3], self.args[i + 4], self.args[i + 5])), 1)
+            req_node.increment(('modp', 'dot product'),
+                               self.args[i + 3] * self.args[i + 5])
 
     def get_repeat(self):
         return sum(reduce(operator.mul, self.args[i + 3:i + 6])
@@ -2669,6 +2701,8 @@ class conv2ds(base.DataInstruction, base.VarArgsInstruction, base.Mergeable):
             args = self.args[i:i + 15]
             req_node.increment(('matmul', (1, args[7] * args[8] * args[11],
                                            args[14] * args[3] * args[4])), 1)
+            req_node.increment(('modp', 'dot product'),
+                               args[14] * args[3] * args[4])
 
 @base.vectorize
 class trunc_pr(base.VarArgsInstruction):
@@ -2686,6 +2720,17 @@ class trunc_pr(base.VarArgsInstruction):
 
 class shuffle_base(base.DataInstruction):
     n_relevant_parties = 2
+
+    def __init__(self, *args, **kwargs):
+        super(shuffle_base, self).__init__(*args, **kwargs)
+        prog = base.program
+        if re.match('ring|rep-field|sy-rep.*', prog.options.execute or ''):
+            ref = 'AHIK+22'
+        elif prog.options.execute:
+            ref = 'KS14'
+        else:
+            ref = ('AHIK+22', 'KS14')
+        base.program.reading('secure shuffling', ref)
 
     @staticmethod
     def logn(n):
@@ -2830,12 +2875,12 @@ class sqrs(base.CISC):
     
     def expand(self):
         s = [program.curr_block.new_reg('s') for i in range(6)]
-        c = [program.curr_block.new_reg('c') for i in range(2)]
+        c = [self.args[0].clear_type() for i in range(2)]
         square(s[0], s[1])
         subs(s[2], self.args[1], s[0])
         asm_open(False, c[0], s[2])
         mulc(c[1], c[0], c[0])
-        mulm(s[3], self.args[1], c[0])
+        comparison.maybe_mulm(s[3], self.args[1], c[0])
         adds(s[4], s[3], s[3])
         adds(s[5], s[1], s[4])
         subml(self.args[0], s[5], c[1])

@@ -34,9 +34,11 @@ class StackedVector : CheckVector<T>
 {
     vector<size_t> stack;
     CheckVector<T>& full;
-    size_t start;
+    size_t start, finish;
 
 public:
+    typedef typename CheckVector<T>::iterator iterator;
+
     StackedVector() :
             StackedVector<T>(0)
     {
@@ -46,11 +48,11 @@ public:
     {
     }
     StackedVector(size_t size, const T& def) :
-            CheckVector<T>(size, def), full(*this), start(0)
+            CheckVector<T>(size, def), full(*this), start(0), finish(size)
     {
     }
 
-    size_t size() const { return full.size() - start; }
+    size_t size() const { return finish - start; }
 
     void resize(size_t new_size)
     {
@@ -59,7 +61,9 @@ public:
             if (OnlineOptions::singleton.has_option("verbose_registers"))
                 fprintf(stderr, "adding %zu %s registers to %zu\n", new_size,
                         T::type_string().c_str(), start);
-            full.resize(start + new_size);
+            if (start + new_size > full.size())
+                full.resize(start + new_size);
+            finish = start + new_size;
         }
         catch (bad_alloc&)
         {
@@ -72,21 +76,37 @@ public:
     void reserve(size_t new_size) { full.reserve(start + new_size); }
 
     auto begin() { return full.begin() + start; }
-    auto end() { return full.end(); }
+    auto end() { return full.begin() + finish; }
     auto begin() const { return full.begin() + start; }
-    auto end() const { return full.end(); }
+    auto end() const { return full.begin() + finish; }
 
     T& operator[](size_t i) { return full[start + i]; }
     const T& operator[](size_t i) const { return full[start + i]; }
     T& at(size_t i) { return full[start + i]; }
     const T& at(size_t i) const { return full[start + i]; }
 
-    void push_back(const T& x) { full.push_back(x); }
+    void push_back(const T& x)
+    {
+        if (end() < full.end())
+            *end() = x;
+        else
+            full.push_back(x);
+        finish++;
+    }
+
+    iterator iterator_for_size(size_t i, size_t size)
+    {
+        auto res = begin() + i;
+        if (res + size > end())
+            throw runtime_error("vector too small");
+        return res;
+    }
 
     void push_stack()
     {
         stack.push_back(start);
-        start = full.size();
+        start = finish;
+        finish = start;
     }
 
     void push_args(const vector<int>& args, RegType type)
@@ -96,8 +116,8 @@ public:
             {
                 auto dest = begin() + it[3];
                 auto source = full.begin() + stack.back() + it[4];
-                if (dest + it[2] > full.end())
-                    full.resize(start + it[1]);
+                if (dest + it[2] > end())
+                    resize(start + it[1]);
                 assert(dest + it[2] <= full.end());
                 assert(source + it[2] <= full.begin() + start);
                 copy(source, source + it[2], dest);
@@ -118,7 +138,7 @@ public:
                 copy(source, source + it[2], dest);
             }
 
-        full.resize(start);
+        finish = start;
         start = stack.back();
         stack.pop_back();
     }

@@ -61,6 +61,7 @@ template<class T>
 void Rep3Shuffler<T>::apply_multiple(StackedVector<T> &a, vector<size_t> &sizes, vector<size_t> &destinations,
                                     vector<size_t> &sources, vector<size_t> &unit_sizes, vector<shuffle_type> &shuffles,
                                     vector<bool> &reverses) {
+    CODE_LOCATION
     const auto n_shuffles = sizes.size();
     assert(sources.size() == n_shuffles);
     assert(destinations.size() == n_shuffles);

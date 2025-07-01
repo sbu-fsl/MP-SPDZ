@@ -428,6 +428,7 @@ class TreeTrainer:
         self.debug_gini = False
         self.debug = False
         self.time = False
+        get_program().reading('decision tree learning', 'HIKC23')
 
     def train(self):
         """ Train and return decision tree. """

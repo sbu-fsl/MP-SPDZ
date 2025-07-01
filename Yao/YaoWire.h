@@ -11,6 +11,8 @@
 
 class YaoWire : public Phase
 {
+	friend ostream& operator<<(ostream&, const YaoWire&);
+
 protected:
 	Key key_;
 
@@ -35,5 +37,11 @@ public:
 	template<class T>
 	void other_input(T&, int) {}
 };
+
+inline ostream& operator<<(ostream& o, const YaoWire& wire)
+{
+    o << wire.key_;
+	return o;
+}
 
 #endif /* YAO_YAOWIRE_H_ */

@@ -60,6 +60,7 @@ void Rep4RingPrep<T>::buffer_squares()
 template<class T>
 void Rep4RingPrep<T>::buffer_bits()
 {
+    CODE_LOCATION
     assert(this->proc != 0);
     SeededPRNG G;
     octetStream os;

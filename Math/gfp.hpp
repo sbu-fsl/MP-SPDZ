@@ -32,6 +32,15 @@ void gfp_<X, L>::check_setup(string dir)
 }
 
 template<int X, int L>
+const bigint& gfp_<X, L>::pr(bool allow_zero)
+{
+  if (not allow_zero and ZpD.pr == 0)
+    throw runtime_error("gfp not initialized");
+
+  return ZpD.pr;
+}
+
+template<int X, int L>
 void gfp_<X, L>::init_field(const bigint& p, bool mont)
 {
   ZpD.init(p, mont);
@@ -118,6 +127,18 @@ gfp_<X, L> gfp_<X, L>::operator>>(int n) const
 }
 
 
+template<int X, int L>
+gfp_<X, L> gfp_<X, L>::signed_rshift(int i) const
+{
+  to_signed_bigint(bigint::tmp, *this);
+  auto& tmp = bigint::tmp;
+  if (tmp < 0)
+      return tmp = -(-tmp >> i);
+  else
+      return bigint::tmp >>= i;
+}
+
+
 template <int X, int L>
 gfp_<X, L> gfp_<X, L>::operator<<(const gfp_& i) const
 {
@@ -158,14 +179,16 @@ void gfp_<X, L>::reqbl(int n)
 {
   if ((int)n > 0 && pr() < bigint(1) << (n-1))
     {
-      cerr << "Tape requires prime of bit length " << n << endl;
-      cerr << "Run with '-lgp " << n << "'" << endl;
-      throw invalid_params();
+      cerr << "Program requires a prime of bit length " << n << ". "
+          << "Run with '-lgp " << n << "' or compile with '--prime "
+          << pr() << "'" << endl;
+      exit(1);
     }
   else if ((int)n < 0)
     {
-      throw Processor_Error("Program compiled for rings not fields, "
-              "run compile.py without -R");
+      cerr << "Program compiled for rings not fields, "
+          "run compile.py without -R" << endl;
+      exit(1);
     }
 }
 

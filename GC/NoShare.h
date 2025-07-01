@@ -9,6 +9,7 @@
 #include "Processor/DummyProtocol.h"
 #include "Processor/Instruction.h"
 #include "Protocols/ShareInterface.h"
+#include "Protocols/NoProtocol.h"
 
 class InputArgs;
 class ArithmeticProcessor;
@@ -95,6 +96,7 @@ public:
     void output(ostream&, bool) {}
 
     void pack(octetStream&) const { fail(); }
+    void unpack(const octetStream&) {}
 };
 
 inline ostream& operator<<(ostream& o, NoValue)
@@ -107,7 +109,7 @@ class NoShare : public ShareInterface
 public:
     typedef DummyMC<NoShare> MC;
     typedef DummyProtocol<NoShare> Protocol;
-    typedef NotImplementedInput<NoShare> Input;
+    typedef NoInput<NoShare> Input;
     typedef DummyLivePrep<NoShare> LivePrep;
     typedef DummyMC<NoShare> MAC_Check;
 
@@ -209,6 +211,12 @@ public:
 
     void pack(octetStream&) const { fail(); }
 };
+
+inline ostream& operator<<(ostream& o, NoShare)
+{
+    NoShare::fail();
+    return o;
+}
 
 } /* namespace GC */
 

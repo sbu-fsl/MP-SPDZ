@@ -1,5 +1,7 @@
 from copy import copy
 
+program.curr_tape.require_bit_length(40, '2')
+
 rcon_raw = [
         0x8d, 0x01, 0x02, 0x04, 0x08, 0x10, 0x20, 0x40, 0x80, 0x1b, 0x36, 0x6c, 0xd8, 0xab, 0x4d, 0x9a,
         0x2f, 0x5e, 0xbc, 0x63, 0xc6, 0x97, 0x35, 0x6a, 0xd4, 0xb3, 0x7d, 0xfa, 0xef, 0xc5, 0x91, 0x39,
@@ -31,7 +33,6 @@ powers2 = VectorArray(8, cgf2n, nparallel)
 for idx in range(8):
     powers2[idx] = cgf2n(2,size=nparallel) ** (5 * idx)
 
-@vectorize
 def ApplyEmbedding(x):
     in_bytes = x.bit_decompose(8)
 
@@ -61,7 +62,6 @@ def embed_helper(in_bytes):
     out_bytes[7] = in_bytes[7]
     return out_bytes
 
-@vectorize
 def ApplyBDEmbedding(x):
     entire_sequence_bits = copy(x)
 
@@ -90,7 +90,6 @@ def PreprocInverseEmbedding(x):
 
     return out_bytes
 
-@vectorize
 def InverseEmbedding(x):
     out_bytes = PreprocInverseEmbedding(x)
     ret = cgf2n(0)
@@ -142,13 +141,11 @@ def expandAESKey(cipherKey, Nr = 10, Nb = 4, Nk = 4):
 def SecretArrayEmbedd(byte_array):
     return [ApplyEmbedding(_) for _ in byte_array]
 
-@vectorize
 def subBytes(state):
     for i in range(len(state)):
         state[i] = box.apply_sbox(state[i])
 
 def addRoundKey(roundKey):
-    @vectorize
     def inner(state):
         for i in range(len(state)):
             state[i] = state[i] + roundKey[i]
@@ -163,7 +160,6 @@ Kv[3] = ApplyEmbedding(cgf2n(3,size=nparallel))
 Kv[4] = ApplyEmbedding(cgf2n(4,size=nparallel))
 
 
-@vectorize
 def mixColumn(column):
     temp = copy(column)
     v1 = Kv[1]
@@ -177,7 +173,6 @@ def mixColumn(column):
     column[2] = temp[0] + temp[1] + doubles[2] + (temp[3] + doubles[3])
     column[3] = (temp[0] + doubles[0]) + temp[1] + temp[2] + doubles[3]
 
-@vectorize
 def mixColumns(state):
     for i in range(4):
         column = []
@@ -194,7 +189,6 @@ def shiftRows(state):
     for i in range(4):
         state[i::4] = rotate(state[i::4],i)
 
-@vectorize
 def state_collapse(state):
     return [InverseEmbedding(_) for _ in state]
 
@@ -216,7 +210,6 @@ for i,_list in enumerate(_embedded_powers):
     for j,x in enumerate(_list):
         enum_squarings[40 * i + j] = cgf2n(x, size=nparallel)
 
-@vectorize
 def fancy_squaring(bd_val, exponent):
     #This is even more fancy; it performs directly on bit dec values
     #returns x ** (2 ** exp) from a bit decomposed value
@@ -324,7 +317,6 @@ class SpdzBox(object):
 box = SpdzBox()
 
 def aesRound(roundKey):
-    @vectorize
     def inner(state):
         subBytes(state)
         shiftRows(state)
@@ -338,7 +330,6 @@ def createRoundKey(expandedKey, n):
 
 # wrapper function for 10 rounds of AES since we're using a 128-bit key
 def aesMain(expandedKey, numRounds=10):
-    @vectorize
     def inner(state):
         roundKey = createRoundKey(expandedKey, 0)
         addRoundKey(roundKey)(state)
@@ -355,7 +346,6 @@ def aesMain(expandedKey, numRounds=10):
     return inner
 
 def encrypt_without_key_schedule(expandedKey):
-    @vectorize
     def encrypt(plaintext):
         plaintext = SecretArrayEmbedd(plaintext)
         aesMain(expandedKey)(plaintext)

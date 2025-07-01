@@ -706,7 +706,8 @@ int main(int argc, const char** argv)
           0, // Required?
           1, // Number of args expected.
           0, // Delimiter if expecting multiple args.
-          "", // Help description.
+          "Compiled program to use for preprocessing requirements",
+          // Help description.
           "-p", // Flag token.
           "--program" // Flag token.
   );

@@ -148,6 +148,7 @@ void OTMultiplier<T>::multiply()
 template<class T>
 void SemiMultiplier<T>::multiplyForBits()
 {
+    CODE_LOCATION
     auto& rot_ext = this->rot_ext;
     auto& otCorrelator = this->otCorrelator;
 
@@ -202,6 +203,7 @@ void SemiMultiplier<T>::multiplyForBits()
 template<class T>
 void SemiMultiplier<T>::multiplyForMixed()
 {
+    CODE_LOCATION
     auto& rot_ext = this->rot_ext;
 
     typedef Square<BitVec> X;
@@ -252,6 +254,7 @@ void SemiMultiplier<T>::multiplyForMixed()
 template<class W>
 void OTMultiplier<W>::multiplyForTriples()
 {
+    CODE_LOCATION
     typedef typename W::Rectangle X;
 
     otCorrelator.resize(X::n_columns() * generator.nPreampTriplesPerLoop);
@@ -538,6 +541,7 @@ template<class T>
 template<int>
 void MascotMultiplier<T>::multiplyForBits(true_type)
 {
+    CODE_LOCATION
     auto& macs = this->macs;
     auto& outbox = this->outbox;
     auto& generator = this->generator;
@@ -590,6 +594,7 @@ void MascotMultiplier<T>::multiplyForBits(true_type)
 template<class U>
 void MascotMultiplier<U>::multiplyForInputs(MultJob job)
 {
+    CODE_LOCATION
     assert(job.input);
     auto& generator = this->generator;
     bool mine = job.player == generator.my_num;
@@ -617,6 +622,7 @@ void MascotMultiplier<U>::multiplyForInputs(MultJob job)
 template<int K, int S>
 void Spdz2kMultiplier<K, S>::multiplyForInputs(MultJob job)
 {
+    CODE_LOCATION
     assert(job.input);
     bool mine = job.player == this->generator.my_num;
     input_mac_vole->set_role(mine ? SENDER : RECEIVER);
@@ -629,6 +635,7 @@ void Spdz2kMultiplier<K, S>::multiplyForInputs(MultJob job)
 template<class U>
 void TinierMultiplier<U>::multiplyForInputs(MultJob job)
 {
+    CODE_LOCATION
     assert(job.input);
     auto& generator = this->generator;
     bool mine = job.player == generator.my_num;

@@ -22,9 +22,13 @@ void DiskVectorBase::init(size_t byte_size)
         throw runtime_error("resizing of disk memory not implemented");
     else
     {
+        auto dir_path = OnlineOptions::singleton.disk_memory;
+        boost::filesystem::path dir(dir_path);
+        if (not boost::filesystem::is_directory(dir))
+            throw std::runtime_error(dir_path + " is not a directory");
+
         path = boost::filesystem::unique_path(
-                (boost::filesystem::path(OnlineOptions::singleton.disk_memory)
-                        / std::string("%%%%-%%%%-%%%%-%%%%")).native());
+                (dir / std::string("%%%%-%%%%-%%%%-%%%%")).native());
 
         std::ofstream f(path.native());
         f.close();

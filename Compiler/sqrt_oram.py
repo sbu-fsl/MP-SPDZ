@@ -160,6 +160,8 @@ class SqrtOram(Generic[T, B]):
         SqrtOram.refresh = lib.method_block(SqrtOram.refresh) if allow_memory_allocation else SqrtOram.refresh
         SqrtOram.reinitialize = lib.method_block(SqrtOram.reinitialize) if allow_memory_allocation else SqrtOram.reinitialize
 
+        lib.get_program().reading('square-root ORAM', 'ZWRG+16')
+
     @lib.method_block
     def access(self, index: T, write: B, *value: T):
         global trace,n_parallel

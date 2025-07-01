@@ -76,6 +76,7 @@ opcodes = dict(
     PRINTREGPLAINB = 0x222,
     PRINTFLOATPLAINB = 0x223,
     CONDPRINTSTRB = 0x224,
+    PRINTREGPLAINSB = 0x225,
     CONVCBIT = 0x230,
     CONVCBITVEC = 0x231,
 )
@@ -551,6 +552,11 @@ class split(base.Instruction):
         super(split_class, self).__init__(*args, **kwargs)
         assert (len(args) - 2) % args[0] == 0
 
+    def add_usage(self, req_node):
+        req_node.increment(('modp', '%d-way split' % self.args[0]),
+                           self.get_size())
+        req_node.increment(('modp', '%d-way split round' % self.args[0]), 1)
+
 class movsb(BinaryVectorInstruction):
     """ Copy secret bit register.
 
@@ -693,6 +699,14 @@ class print_reg_plainb(NonVectorInstruction, base.IOInstruction):
     """
     code = opcodes['PRINTREGPLAINB']
     arg_format = ['cb']
+
+class print_reg_plainsb(NonVectorInstruction, base.IOInstruction):
+    """ Output secret bit register.
+
+    :param: source (sbit)
+    """
+    code = opcodes['PRINTREGPLAINSB']
+    arg_format = ['sb']
 
 class print_reg_signed(base.IOInstruction):
     """ Signed output of clear bit register.

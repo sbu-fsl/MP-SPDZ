@@ -816,13 +816,41 @@ NamedCommStats NamedCommStats::operator -(const NamedCommStats& other) const
   return res;
 }
 
-void NamedCommStats::print(bool newline)
+CommStats& CommStats::imax(const CommStats& other)
+{
+  data = max(data, other.data);
+  rounds = max(rounds, other.rounds);
+  timer = max(timer, other.timer);
+  return *this;
+}
+
+NamedCommStats& NamedCommStats::imax(const NamedCommStats& other)
+{
+  sent = max(sent, other.sent);
+  for (auto it = other.begin(); it != other.end(); it++)
+    map<string, CommStats>::operator[](it->first).imax(it->second);
+  return *this;
+}
+
+void NamedCommStats::print(bool newline, const NamedCommStats& max)
 {
   for (auto it = begin(); it != end(); it++)
     if (it->second.data)
-      cerr << it->first << " " << 1e-6 * it->second.data << " MB in "
-      << it->second.rounds << " rounds, taking " << it->second.timer.elapsed()
-      << " seconds" << endl;
+      {
+        auto time = it->second.timer.elapsed();
+        cerr << it->first << " " << 1e-6 * it->second.data << " MB in "
+            << it->second.rounds << " rounds, taking " << time << " seconds";
+        try
+        {
+          auto max_time = max.at(it->first).timer.elapsed();
+          if (max_time and max_time != time)
+            cerr << " (at most " << max_time << ")";
+        }
+        catch(out_of_range&)
+        {
+        }
+        cerr << endl;
+      }
   if (size() and newline)
     cerr << endl;
 }

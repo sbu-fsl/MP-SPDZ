@@ -32,7 +32,7 @@ void ProcessorBase::setup_redirection(int my_num, int thread_num,
     // only output on party 0 if not interactive
     bool always_stdout = opts.cmd_private_output_file == ".";
     bool output = my_num == 0 or opts.interactive or always_stdout;
-    output &= real;
+    output &= real or always_stdout;
     out.activate(output);
 
     if (not (opts.cmd_private_output_file.empty() or always_stdout))

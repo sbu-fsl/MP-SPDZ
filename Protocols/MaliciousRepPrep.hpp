@@ -75,6 +75,7 @@ void MaliciousBitOnlyRepPrep<T>::init_honest(Player& P)
 template<class T>
 void MaliciousRepPrep<T>::buffer_triples()
 {
+    CODE_LOCATION
     check_field_size<typename T::open_type>();
     auto& triples = this->triples;
     auto buffer_size = BaseMachine::batch_size<T>(DATA_TRIPLE,
@@ -111,6 +112,7 @@ void MaliciousRepPrep<T>::buffer_triples()
 template<class T, class U>
 void sacrifice(const vector<array<T, 5>>& check_triples, Player& P)
 {
+    CODE_LOCATION
     check_field_size<U>();
     vector<T> masked, checks;
     vector <typename T::open_type> opened;
@@ -141,6 +143,7 @@ void sacrifice(const vector<array<T, 5>>& check_triples, Player& P)
 template<class T>
 void MaliciousRepPrep<T>::buffer_squares()
 {
+    CODE_LOCATION
     vector<T> masked;
     vector<T> checks;
     vector<typename T::open_type> opened;
@@ -187,6 +190,7 @@ void MaliciousRepPrep<T>::buffer_squares()
 template<class T>
 void MaliciousBitOnlyRepPrep<T>::buffer_bits()
 {
+    CODE_LOCATION
     vector<T> masked;
     vector<T> checks;
     vector<typename T::open_type> opened;

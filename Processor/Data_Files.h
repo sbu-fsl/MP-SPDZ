@@ -113,7 +113,10 @@ protected:
   void count(Dtype dtype, int n = 1)
   { usage.files[T::clear::field_type()][dtype] += do_count * n; }
   void count_input(int player)
-  { usage.inputs[player][T::clear::field_type()] += do_count; }
+  {
+    usage.inputs.resize(max(size_t(player + 1), usage.inputs.size()));
+    usage.inputs[player][T::clear::field_type()] += do_count;
+  }
 
   template<int>
   void get_edabits(bool strict, size_t size, T* a,
@@ -129,6 +132,19 @@ protected:
 
 public:
   int buffer_size;
+
+  /// Key-independent setup if necessary (cryptosystem parameters)
+  static void basic_setup(Player&) {}
+  /// Generate keys if necessary
+  static void setup(Player&, typename T::mac_key_type) {}
+  /// Free memory of global cryptosystem parameters
+  static void teardown() {}
+
+  static void edabit_sacrifice_buckets(vector<edabit<T>>&, size_t, bool, int,
+          SubProcessor<T>&, int, int, const void* = 0)
+  {
+    throw runtime_error("sacrifice not available");
+  }
 
   template<class U, class V>
   static Preprocessing<T>* get_new(Machine<U, V>& machine, DataPositions& usage,

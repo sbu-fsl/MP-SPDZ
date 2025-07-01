@@ -112,5 +112,26 @@ void ThreadQueues::print_breakdown()
                     << " on the preprocessing/offline phase, and "
                     << sum("wait").full() << " idling." << endl;
         }
+
+        if (sum("random").elapsed())
+            cerr << "Spent " << sum("random").full()
+                    << " on correlated randomness generation." << endl;
     }
+}
+
+NamedCommStats ThreadQueues::total_comm()
+{
+    NamedCommStats res;
+    for (auto& queue : *this)
+      res += queue->get_comm_stats();
+    return res;
+}
+
+NamedCommStats ThreadQueues::max_comm()
+{
+    NamedCommStats max;
+    if (size() > 2)
+        for (auto& queue : *this)
+            max.imax(queue->get_comm_stats());
+    return max;
 }

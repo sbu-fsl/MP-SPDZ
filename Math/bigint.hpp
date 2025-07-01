@@ -8,6 +8,7 @@
 
 #include "bigint.h"
 #include "Integer.h"
+#include "Processor/BaseMachine.h"
 
 template<int X, int L>
 bigint& bigint::from_signed(const gfp_<X, L>& other)
@@ -52,11 +53,13 @@ mpf_class bigint::get_float(T v, T p, T z, T s)
 template<class U, class T>
 void bigint::output_float(U& o, const mpf_class& x, T nan)
 {
-    assert(nan.is_bit());
     if (nan.is_zero())
         o << x;
     else
+    {
         o << "NaN";
+        BaseMachine::s().nan_warning = true;
+    }
 }
 
 

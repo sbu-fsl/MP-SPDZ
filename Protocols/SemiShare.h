@@ -114,7 +114,7 @@ public:
     {
     }
 
-    void assign(const char* buffer)
+    void assign(const void* buffer)
     {
         super::assign(buffer);
     }

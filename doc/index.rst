@@ -2,9 +2,13 @@ Welcome to MP-SPDZ's documentation!
 ===================================
 
 MP-SPDZ is a framework for multi-party computation, a
-privacy-enhancing technology focused on input privacy. Please see
-`this gentle introduction <https://eprint.iacr.org/2020/300>`_ for
-more information on multi-party computation.
+privacy-enhancing technology focused on input privacy. It uses
+protocols running between several entities to create a conceptual
+black box in which data can operated on privately. Such a black box
+could be created between banks or healthcare providers to jointly
+operate on privacy-sensitive data. Please see `this gentle
+introduction <https://eprint.iacr.org/2020/300>`_ for more information
+on multi-party computation.
 
 If you're new to MP-SPDZ, consider the following:
 
@@ -20,6 +24,7 @@ If you're new to MP-SPDZ, consider the following:
 
    readme
    compilation
+   runtime-options
    Compiler
    utils
    journey

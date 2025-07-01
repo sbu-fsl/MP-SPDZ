@@ -95,6 +95,7 @@ vector<Multiplier<typename T::clear::FD>*>& HemiPrep<T>::get_multipliers()
 template<class T>
 void HemiPrep<T>::buffer_triples()
 {
+    CODE_LOCATION
     assert(this->proc != 0);
     auto& P = this->proc->P;
     auto& multipliers = get_multipliers();
@@ -138,6 +139,7 @@ SemiPrep<T>& HemiPrep<T>::get_two_party_prep()
 template<class T>
 void HemiPrep<T>::buffer_bits()
 {
+    CODE_LOCATION
     assert(this->proc);
     if (this->proc->P.num_players() == 2)
     {
@@ -156,6 +158,7 @@ void HemiPrep<T>::buffer_bits()
 template<class T>
 void HemiPrep<T>::buffer_dabits(ThreadQueues* queues)
 {
+    CODE_LOCATION
     assert(this->proc);
     if (this->proc->P.num_players() == 2)
     {

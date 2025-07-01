@@ -7,10 +7,12 @@
 #define TOOLS_SUBROUTINES_HPP_
 
 #include "Subroutines.h"
+#include "CodeLocations.h"
 
 template<class T>
 void Create_Random(T& ans,const Player& P)
 {
+  CODE_LOCATION
   PRNG G;
   G.ReSeed();
   vector<T> e(P.num_players());

@@ -42,6 +42,7 @@ void SemiPrep::set_protocol(SemiSecret::Protocol& protocol)
 
 void SemiPrep::buffer_triples()
 {
+    CODE_LOCATION
     assert(this->triple_generator);
     this->triple_generator->set_batch_size(
             DIV_CEIL(BaseMachine::batch_size<SemiSecret>(DATA_TRIPLE,

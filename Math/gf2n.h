@@ -128,6 +128,8 @@ protected:
   template<class T>
   gf2n_(IntBase<T> a) : a(a.get()) {}
 
+  gf2n_(PRNG& G);
+
   int is_zero() const            { return (a==0); }
   int is_one()  const            { return (a==1); }
   bool operator==(const gf2n_& y) const { return a==y.a; }
@@ -267,6 +269,12 @@ template<>
 inline gf2n_<octet>& gf2n_<octet>::mul(const gf2n_<octet>& x, const gf2n_<octet>& y)
 {
   return *this = mult_table[octet(x.a)][octet(y.a)];
+}
+
+template<class U>
+gf2n_<U>::gf2n_(PRNG& G)
+{
+  randomize(G);
 }
 
 #endif

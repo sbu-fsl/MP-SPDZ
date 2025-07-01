@@ -56,6 +56,7 @@ void Spdz2kPrep<T>::set_protocol(typename T::Protocol& protocol)
 template<class T>
 void MaliciousRingPrep<T>::buffer_bits()
 {
+    CODE_LOCATION
     assert(this->proc != 0);
     RingPrep<T>::buffer_bits_without_check();
     assert(this->protocol != 0);
@@ -85,6 +86,7 @@ void Spdz2kPrep<T>::buffer_bits()
 template<class T, class U>
 void bits_from_square_in_ring(vector<T>& bits, int buffer_size, U* bit_prep)
 {
+    CODE_LOCATION
     buffer_size = BaseMachine::batch_size<T>(DATA_BIT, buffer_size);
     typedef typename U::share_type BitShare;
     typedef typename BitShare::open_type open_type;
@@ -165,6 +167,7 @@ template<int>
 void MaliciousRingPrep<T>::buffer_edabits_from_personal(bool strict, int n_bits,
         ThreadQueues* queues, false_type)
 {
+    CODE_LOCATION
     assert(this->proc != 0);
     typedef typename T::bit_type::part_type bit_type;
     vector<vector<bit_type>> bits;
@@ -243,6 +246,7 @@ template<class T>
 void MaliciousRingPrep<T>::buffer_edabits(bool strict, int n_bits,
         ThreadQueues* queues)
 {
+    CODE_LOCATION
     RunningTimer timer;
 #ifndef NONPERSONAL_EDA
     this->buffer_edabits_from_personal(strict, n_bits, queues);

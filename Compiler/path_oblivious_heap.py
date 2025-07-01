@@ -992,6 +992,8 @@ class PathObliviousHeap(AbstractMinPriorityQueue[_secret]):
             init_rounds=init_rounds,
         )
 
+        lib.get_program().reading('path oblivious heap', 'Shi19')
+
     def insert(self, value, priority, fake: bool = False) -> None:
         """Insert an element with a priority into the queue."""
         value = self.int_type.hard_conv(value)

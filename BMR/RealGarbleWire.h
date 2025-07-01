@@ -12,7 +12,7 @@ template<class T> class RealProgramParty;
 template<class T> class RealGarbleWire;
 
 template<class T>
-class GarbleInputter
+class GarbleInputter : public InputterBase
 {
 public:
 	RealProgramParty<T>& party;

@@ -10,6 +10,7 @@ template<class T>
 void RingOnlyPrep<T>::buffer_dabits_from_bits_without_check(
         vector<dabit<T> >& dabits, int buffer_size, ThreadQueues*)
 {
+    CODE_LOCATION
     vector<dabit<T>> new_dabits;
     assert(this->proc != 0);
     auto& party = GC::ShareThread<typename T::bit_type>::s();

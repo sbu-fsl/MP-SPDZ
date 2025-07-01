@@ -25,6 +25,7 @@ void bits_from_random(vector<T>& bits, typename T::Protocol& protocol);
 namespace GC
 {
 template<class T> class ShareThread;
+class NoShare;
 }
 
 /**
@@ -36,8 +37,6 @@ class BufferPrep : public Preprocessing<T>
     template<class U, class V> friend class Machine;
 
     friend class InScope;
-
-    static const bool homomorphic = false;
 
     template<int>
     void buffer_inverses(true_type);
@@ -89,6 +88,8 @@ protected:
 
 public:
     typedef T share_type;
+
+    static const bool homomorphic = false;
 
     /// Key-independent setup if necessary (cryptosystem parameters)
     static void basic_setup(Player& P) { (void) P; }
@@ -178,6 +179,8 @@ class RingPrep : public virtual BitPrep<T>
 {
     typedef typename T::bit_type::part_type BT;
 
+    SubProcessor<BT>& get_bit_part_proc();
+
 protected:
     void buffer_dabits_without_check(vector<dabit<T>>& dabits,
             int buffer_size = -1, ThreadQueues* queues = 0);
@@ -190,11 +193,15 @@ protected:
             int buffer_size);
 
     void buffer_sedabits_from_edabits(int n_bits)
-    { this->template buffer_sedabits_from_edabits<0>(n_bits, T::clear::characteristic_two); }
+    {
+        this->template buffer_sedabits_from_edabits<0>(n_bits,
+                T::clear::characteristic_two,
+                is_same<typename T::bit_type, GC::NoShare>());
+    }
     template<int>
-    void buffer_sedabits_from_edabits(int n_bits, false_type);
+    void buffer_sedabits_from_edabits(int n_bits, false_type, false_type);
     template<int>
-    void buffer_sedabits_from_edabits(int, true_type)
+    void buffer_sedabits_from_edabits(int, bool, bool)
     { throw not_implemented(); }
 
     template<int>

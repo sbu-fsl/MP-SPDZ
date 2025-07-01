@@ -21,6 +21,7 @@ void Triple_Checking(const Player& P, MAC_Check<T>& MC, int nm,
     int output_thread, TripleSacriFactory< Share<T> >& factory, bool write_output,
     bool clear, string dir)
 {
+  CODE_LOCATION
   check_field_size<T>();
 
   ofstream outf;
@@ -109,6 +110,7 @@ void Inverse_Checking(const Player& P, MAC_Check<T>& MC, int nr,
     TupleSacriFactory<Share<T> >& inverse_factor, bool write_output,
     bool clear, string dir)
 {
+  CODE_LOCATION
   ofstream outf_inv;
   if (write_output)
     open_prep_file<T>(outf_inv, "Inverses", P.my_num(), output_thread, false,
@@ -183,6 +185,7 @@ void Square_Checking(const Player& P, MAC_Check<T>& MC, int ns,
         int output_thread, TupleSacriFactory<Share<T> >& square_factory,
         bool write_output, bool clear, string dir)
 {
+  CODE_LOCATION
   ofstream outf_s, outf_b;
   if (write_output)
   {
@@ -250,6 +253,7 @@ void Bit_Checking(const Player& P, MAC_Check<gfp>& MC, int nb,
         SingleSacriFactory<Share<gfp> >& bit_factory, bool write_output,
         bool clear, string dir)
 {
+  CODE_LOCATION
   gfp dummy;
   ofstream outf_b;
   if (write_output)

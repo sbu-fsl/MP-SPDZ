@@ -106,6 +106,13 @@ public:
         assert((is_same<typename sint::bit_type, T>()));
     }
 
+    BinaryProtocolSet(Player& P, const typename T::mac_key_type mac_key) :
+            usage(P.num_players()), prep(usage), thread(prep, P,
+                    mac_key), output(*thread.MC), protocol(
+                    *thread.protocol), input(output, prep, P)
+    {
+    }
+
     /**
      * Run all protocol checks
      */
@@ -151,6 +158,14 @@ public:
     template<class sgf2n>
     MixedProtocolSet(Player& P, const Machine<T, sgf2n>& machine) :
             arithmetic(P, machine), binary(P, machine), output(
+                    arithmetic.output), preprocessing(arithmetic.preprocessing), protocol(
+                    arithmetic.protocol), input(arithmetic.input)
+    {
+    }
+
+    MixedProtocolSet(Player& P, typename T::mac_key_type arithmetic_mac_key,
+            typename T::bit_type::mac_key_type binary_mac_key) :
+            arithmetic(P, arithmetic_mac_key), binary(P, binary_mac_key), output(
                     arithmetic.output), preprocessing(arithmetic.preprocessing), protocol(
                     arithmetic.protocol), input(arithmetic.input)
     {

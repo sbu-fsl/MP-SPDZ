@@ -8,6 +8,7 @@
 
 template <class T>
 void OTVoleBase<T>::evaluate(vector<T>& output, const vector<T>& newReceiverInput) {
+    CODE_LOCATION
     const int N1 = newReceiverInput.size() + 1;
     output.resize(newReceiverInput.size());
     auto& os = oss;

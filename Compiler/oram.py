@@ -848,6 +848,7 @@ class TrivialORAM(RefTrivialORAM, AbstractORAM):
         if init_rounds != -1:
             stop_timer(1)
             start_timer()
+        get_program().reading('ORAM', 'KS14')
 
 def get_n_threads(n_loops):
     if n_threads is None and not single_thread:
@@ -859,7 +860,15 @@ def get_n_threads(n_loops):
         return n_threads
 
 class LinearORAM(TrivialORAM):
-    """ Contiguous ORAM that stores entries in order. """
+    """ Contiguous ORAM that stores entries in order and accesses the
+    entire array for reading and writing in order to hide the address.
+
+    :param size: number of entries
+    :param value_type: :py:class:`sint` (default) / :py:class:`sg2fn` /
+      :py:class:`sfix`
+    :param value_length: number of values per entry (default: 1)
+
+    """
     @staticmethod
     def get_array(size, t, *args, **kwargs):
         return Array(size, t, *args, **kwargs)
@@ -1142,7 +1151,10 @@ class TreeORAM(AbstractORAM):
             new_path = regint.get_random(self.D)
             l_star = self.index_type(new_path)
         self.state.write(l_star)
-        return self.index.update(u, l_star, evict=False).reveal()
+        res = self.index.update(u, l_star, evict=False).reveal()
+        if isinstance(res, types._clear):
+            res = regint(cint.conv(res))
+        return res
     @method_block
     def read_and_remove_levels(self, u, read_path):
         u = MemValue(u)
@@ -1742,12 +1754,14 @@ class BinaryORAM:
 
 def OptimalORAM(size,*args,**kwargs):
     """ Create an ORAM instance suitable for the size based on
-    experiments. This uses the approach by `Keller and Scholl
-    <https://eprint.iacr.org/2014/137>`_.
+    experiments. This uses :py:class:`LinearORAM` for sizes up to a
+    few thousand and :py:class:`RecursiveORAM` above that.
 
-    :param size: number of elements
+    :param size: number of entries
     :param value_type: :py:class:`sint` (default) / :py:class:`sg2fn` /
       :py:class:`sfix`
+    :param value_length: number of values per entry (default: 1)
+
     """
     if not util.is_constant(size):
         raise CompilerError('ORAM size has be a compile-time constant')
@@ -1770,7 +1784,15 @@ class RecursiveIndexStructure(PackedIndexStructure):
     storage = lambda self,*args,**kwargs: OptimalORAM(*args,**kwargs)
 
 class RecursiveORAM(TreeORAM):
-    """ Secure tree ORAM using secure index. """
+    """ Secure tree ORAM using secure index. This uses the approach by
+    `Keller and Scholl <https://eprint.iacr.org/2014/137>`_.
+
+    :param size: number of entries
+    :param value_type: :py:class:`sint` (default) / :py:class:`sg2fn` /
+      :py:class:`sfix`
+    :param value_length: number of values per entry (default: 1)
+
+    """
     index_structure = RecursiveIndexStructure
 
 class TrivialORAMIndexStructure(PackedIndexStructure):
@@ -1880,6 +1902,7 @@ def test_batch_init(oram_type, N):
     def f(i):
         x = oram[value_type(i)]
         x.reveal().print_reg('read')
+    return oram
 
 def oram_delete(oram, iterations=100):
     @for_range(iterations)

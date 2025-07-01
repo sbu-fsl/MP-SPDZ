@@ -23,15 +23,20 @@ class NonLinear:
         if isinstance(a, types.cint):
             return shift_two(a, m)
         prog = program.Program.prog
-        if prog.use_trunc_pr:
-            if not prog.options.ring:
+        if prog.use_trunc_pr and m and (
+                not prog.options.ring or \
+                prog.use_trunc_pr <= (int(prog.options.ring) - k)):
+            prog.reading('probabilistic truncation', 'DEK20')
+            if prog.options.ring:
+                comparison.require_ring_size(k, 'truncation')
+            else:
                 prog.curr_tape.require_bit_length(k + prog.security)
-            if signed and prog.use_trunc_pr != -1:
-                a += (1 << (k - 1))
+            if not signed:
+                a -= (1 << (k - 1))
             res = sint()
             trunc_pr(res, a, k, m)
-            if signed and prog.use_trunc_pr != -1:
-                res -= (1 << (k - m - 1))
+            if not signed:
+                res += (1 << (k - m - 1))
             return res
         return self._trunc_pr(a, k, m, signed)
 
@@ -87,6 +92,11 @@ class Prime(Masking):
     def kor(self, d):
         return KOR(d)
 
+    def require_bit_length(self, bit_length, op):
+        prog = program.Program.prog
+        if bit_length > 32:
+            prog.curr_tape.require_bit_length(bit_length - 1, reason=op)
+
 class KnownPrime(NonLinear):
     """ Non-linear functionality modulo a prime known at compile time. """
     def __init__(self, prime):
@@ -95,7 +105,8 @@ class KnownPrime(NonLinear):
     def _mod2m(self, a, k, m, signed):
         if signed:
             a += cint(1) << (k - 1)
-        return sint.bit_compose(self.bit_dec(a, k, m, True))
+        prog = program.Program.prog
+        return sint.bit_compose(self.bit_dec(a, k, m, prog.use_edabit()))
 
     def _trunc_pr(self, a, k, m, signed):
         # nearest truncation
@@ -115,7 +126,7 @@ class KnownPrime(NonLinear):
         return res
 
     def bit_dec(self, a, k, m, maybe_mixed=False):
-        assert k < self.prime.bit_length()
+        assert k <= self.prime.bit_length()
         bits = BitDecFull(a, m, maybe_mixed=maybe_mixed)
         assert len(bits) == m
         return bits
@@ -123,7 +134,9 @@ class KnownPrime(NonLinear):
     def eqz(self, a, k):
         # always signed
         a += two_power(k)
-        return 1 - types.sintbit.conv(KORL(self.bit_dec(a, k, k, True)))
+        prog = program.Program.prog
+        return 1 - types.sintbit.conv(KORL(
+            self.bit_dec(a, k, k, prog.use_edabit())))
 
     def ltz(self, a, k):
         if k + 1 < self.prime.bit_length():
@@ -132,6 +145,9 @@ class KnownPrime(NonLinear):
             return self.mod2m(2 * a, k + 1, 1, False)
         else:
             return super(KnownPrime, self).ltz(a, k)
+
+    def require_bit_length(self, bit_length, op):
+        pass
 
 class Ring(Masking):
     """ Non-linear functionality modulo a power of two known at compile time.
@@ -172,3 +188,6 @@ class Ring(Masking):
 
     def ltz(self, a, k):
         return LtzRing(a, k)
+
+    def require_bit_length(self, bit_length, op):
+        comparison.require_ring_size(bit_length, op)

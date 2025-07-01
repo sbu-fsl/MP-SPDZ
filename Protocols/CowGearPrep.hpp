@@ -64,6 +64,7 @@ void CowGearPrep<T>::setup(Player& P, mac_key_type alphai)
 template<class T>
 void CowGearPrep<T>::key_setup(Player& P, mac_key_type alphai)
 {
+    CODE_LOCATION
     Timer timer;
     timer.start();
     auto& machine = *pairwise_machine;
@@ -120,6 +121,7 @@ PairwiseGenerator<typename T::clear::FD>& CowGearPrep<T>::get_generator()
 template<class T>
 void CowGearPrep<T>::buffer_triples()
 {
+    CODE_LOCATION
     auto& generator = get_generator();
     generator.run();
     auto& producer = generator.producer;
@@ -135,6 +137,7 @@ void CowGearPrep<T>::buffer_triples()
 template<class T>
 void CowGearPrep<T>::buffer_inputs(int player)
 {
+    CODE_LOCATION
     auto& generator = get_generator();
     generator.generate_inputs(player);
     assert(not generator.inputs.empty());

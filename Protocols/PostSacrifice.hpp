@@ -61,6 +61,7 @@ void PostSacrifice<T>::check()
     if (buffer_size == 0)
         return;
 
+    CODE_LOCATION
     vector<array<prep_type, 5>> tuples;
     tuples.reserve(buffer_size);
     auto& honest_prot = internal;

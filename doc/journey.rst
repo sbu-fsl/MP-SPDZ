@@ -1,3 +1,5 @@
+.. _journey:
+
 The Journey of a Program
 ========================
 

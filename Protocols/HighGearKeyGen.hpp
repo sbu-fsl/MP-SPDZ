@@ -21,6 +21,7 @@ HighGearKeyGen<L, M>::HighGearKeyGen(Player& P, const FHE_Params& params) :
 template<int L, int M>
 void HighGearKeyGen<L, M>::buffer_mabits()
 {
+    CODE_LOCATION
     vector<BT> diffs;
     vector<typename BT::open_type> open_diffs;
     vector<share_type0> my_bits0;
@@ -80,6 +81,7 @@ template<int L, int M>
 template<class FD>
 void HighGearKeyGen<L, M>::run(PartSetup<FD>& setup, MachineBase& machine)
 {
+    CODE_LOCATION
     RunningTimer timer;
 
     GlobalPRNG global_prng(P);

@@ -12,6 +12,14 @@
 #include "Processor/Input.hpp"
 
 template<class T>
+template<class U>
+ReplicatedInput<T>::ReplicatedInput(SubProcessor<T>* proc,
+        const AstraPrepProtocol<U>& protocol) :
+        ReplicatedInput(proc, protocol.prng_protocol)
+{
+}
+
+template<class T>
 void ReplicatedInput<T>::reset(int player)
 {
     InputBase<T>::reset(player);
@@ -24,18 +32,25 @@ void ReplicatedInput<T>::reset(int player)
             o.reset_write_head();
     }
     expect[player] = false;
+    to_send = 0;
 }
 
 template<class T>
 inline void ReplicatedInput<T>::add_mine(const typename T::open_type& input, int n_bits)
 {
     auto& shares = this->shares;
-    shares.push_back({});
-    T& my_share = shares.back();
-    my_share[0].randomize(protocol.shared_prngs[0], n_bits);
-    my_share[1] = input - my_share[0];
-    my_share[1].pack(os[1], n_bits);
-    this->values_input++;
+    T my_share;
+    if (T::clear::binary)
+    {
+        my_share[0].randomize(protocol.shared_prngs[0], n_bits);
+        my_share[1] = input - my_share[0];
+        my_share[1].pack(os[1], n_bits);
+    }
+    else
+    {
+        my_share[1] = input;
+    }
+    shares.push_back(my_share);
 }
 
 template<class T>
@@ -53,13 +68,40 @@ void ReplicatedInput<T>::send_mine()
 }
 
 template<class T>
+void ReplicatedInput<T>::prepare(size_t n_inputs)
+{
+    os[1].reserve(n_inputs * T::clear::size());
+    to_send = &os[1];
+}
+
+template<class T>
+void ReplicatedInput<T>::add_mine_prepared(T& share,
+        const typename T::open_type& input)
+{
+    share[0].randomize(protocol.shared_prngs[0]);
+    share[1] = input;
+    share[1] -= share[0];
+    to_send->store_no_resize(share[1]);
+}
+
+template<class T>
 void ReplicatedInput<T>::exchange()
 {
+    CODE_LOCATION
+    if (not T::clear::binary and not to_send)
+    {
+        prepare(this->shares.size());
+        for (auto& share : this->shares)
+        {
+            add_mine_prepared(share, share[1]);
+        }
+    }
+
+    this->values_input += this->shares.size();
     for (auto& x : os)
         x.append(0);
     bool receive = expect[P.get_player(1)];
     bool send = not os[1].empty();
-    auto& dest =  InputBase<T>::os[P.get_player(1)];
     if (send)
         if (receive)
             P.pass_around(os[1], dest, -1);
@@ -68,17 +110,18 @@ void ReplicatedInput<T>::exchange()
     else
         if (receive)
             P.receive_player(P.get_player(1), dest);
+    this->shares.reset();
 }
 
 template<class T>
 inline void ReplicatedInput<T>::finalize_other(int player, T& target,
-        octetStream& o, int n_bits)
+        octetStream&, int n_bits)
 {
     int offset = player - this->my_num;
     if (offset == 1 or offset == -2)
     {
         typename T::value_type t;
-        t.unpack(o, n_bits);
+        t.unpack(dest, n_bits);
         target[0] = t;
         target[1] = 0;
     }
@@ -87,6 +130,25 @@ inline void ReplicatedInput<T>::finalize_other(int player, T& target,
         target[0] = 0;
         target[1].randomize(protocol.shared_prngs[1], n_bits);
     }
+}
+
+template<class T>
+T ReplicatedInput<T>::finalize_offset(int offset)
+{
+    T res;
+    switch (offset)
+    {
+    case 0:
+        return this->finalize_mine();
+    case 1:
+    case -2:
+        res[0] = dest.get_no_check<typename T::value_type>();
+        break;
+    case 2:
+    case -1:
+        res[1].randomize(protocol.shared_prngs[1]);
+    }
+    return res;
 }
 
 template<class T>

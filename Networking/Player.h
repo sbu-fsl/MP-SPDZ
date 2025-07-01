@@ -147,6 +147,7 @@ struct CommStats
   Timer& add(const octetStream& os) { return add(os.get_length()); }
   CommStats& operator+=(const CommStats& other);
   CommStats& operator-=(const CommStats& other);
+  CommStats& imax(const CommStats& other);
 };
 
 class CommStatsWithName
@@ -166,6 +167,8 @@ public:
 
 class NamedCommStats : public map<string, CommStats>
 {
+  using super = map<string, CommStats>;
+
 public:
   size_t sent;
   string last;
@@ -175,7 +178,8 @@ public:
   NamedCommStats& operator+=(const NamedCommStats& other);
   NamedCommStats operator+(const NamedCommStats& other) const;
   NamedCommStats operator-(const NamedCommStats& other) const;
-  void print(bool newline = false);
+  NamedCommStats& imax(const NamedCommStats& other);
+  void print(bool newline = false, const NamedCommStats& max = {});
   void reset();
   Timer& add_to_last_round(const string& name, size_t length);
   CommStatsWithName operator[](const string& name)
@@ -187,6 +191,9 @@ public:
  */
 class PlayerBase
 {
+  template<class T> friend class AstraOnlineBase;
+  template<class T> friend class AstraPrepProtocol;
+
 protected:
   int player_no;
 

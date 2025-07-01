@@ -99,6 +99,7 @@ int HemiMatrixPrep<T>::minimum_batch()
 template<class T>
 void HemiMatrixPrep<T>::buffer_triples()
 {
+    CODE_LOCATION
     assert(prep);
     auto& multipliers = prep->get_multipliers();
     auto& FTD = prep->get_FTD();

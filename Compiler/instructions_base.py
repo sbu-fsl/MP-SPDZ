@@ -135,6 +135,7 @@ opcodes = dict(
     SEDABIT = 0x5A,
     RANDOMS = 0x5B,
     RANDOMFULLS = 0x5D,
+    UNSPLIT = 0x5E,
     # Input
     INPUT = 0x60,
     INPUTFIX = 0xF0,
@@ -374,8 +375,6 @@ def gf2n(instruction):
                 else:
                     __format.append(__f[0] + 'g' + __f[1:])
             arg_format[:] = __format
-        elif isinstance(arg_format, property):
-            pass
         else:
             for __f in arg_format.args:
                 reformat(__f)
@@ -394,6 +393,8 @@ def gf2n(instruction):
             __f = next(instruction_cls.arg_format)
             if __f not in ('int', 'long', 'p'):
                 arg_format = itertools.repeat(__f[0] + 'g' + __f[1:])
+        elif isinstance(instruction_cls.arg_format, property):
+            pass
         else:
             arg_format = copy.deepcopy(instruction_cls.arg_format)
             reformat(arg_format)
@@ -623,7 +624,7 @@ def cisc(function, n_outputs=1):
             if program.verbose:
                 print('expanding', self.function.__name__)
             tape = program.curr_tape
-            tape.start_new_basicblock()
+            tape.start_new_basicblock(name='pre-' + self.name())
             size = sum(call[0][0].vector_size() for call in self.calls)
             new_regs = []
             for i, arg in enumerate(self.args):
@@ -643,8 +644,7 @@ def cisc(function, n_outputs=1):
                     raise
             if program.cisc_to_function and \
                (program.curr_tape.singular or program.n_running_threads):
-                if (program.options.garbled or program.options.binary or \
-                    not program.use_tape_calls) and not program.force_cisc_tape:
+                if not program.use_tape_calls and not program.force_cisc_tape:
                     self.expand_to_function(size, new_regs)
                 else:
                     self.expand_to_tape(size, new_regs)
@@ -657,7 +657,7 @@ def cisc(function, n_outputs=1):
                     reg = call[0][i]
                     reg.copy_from_part(new_regs[i], base, reg.vector_size())
                 base += reg.vector_size()
-            tape.start_new_basicblock()
+            tape.start_new_basicblock(name='post-' + self.name())
 
         def add_usage(self, *args):
             pass
@@ -686,6 +686,9 @@ def cisc(function, n_outputs=1):
                 return int_to_bytes(arg.i)
             except:
                 return int_to_bytes(arg)
+
+        def name(self):
+            return self.function.__name__
 
         def __str__(self):
             return self.function.__name__ + ' ' + ', '.join(
@@ -913,7 +916,7 @@ class String(ArgFormat):
         if not isinstance(arg, str):
             raise ArgumentError(arg, 'Argument is not string')
         if len(arg) > cls.length:
-            raise ArgumentError(arg, 'String longer than ' + cls.length)
+            raise ArgumentError(arg, 'String longer than %d' % cls.length)
         if '\0' in arg:
             raise ArgumentError(arg, 'String contains zero-byte')
 

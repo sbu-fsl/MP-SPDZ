@@ -27,6 +27,7 @@ void TinierSharePrep<T>::init_real(Player& P)
 template<class T>
 void TinierSharePrep<T>::buffer_secret_triples()
 {
+    CODE_LOCATION
     auto& thread = ShareThread<secret_type>::s();
     auto& triple_generator = real_triple_generator;
     assert(triple_generator != 0);

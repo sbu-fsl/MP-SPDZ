@@ -11,8 +11,10 @@ Crash without error message, ``Killed``, or ``bad_alloc``
 
 Some protocols require several gigabytes of memory, and the virtual
 machine will crash if there is not enough RAM. You can reduce the
-memory usage for some malicious protocols with ``-B 5``.
-Furthermore, every computation thread requires
+memory usage for many protocols with ``--batch-size`` (try 1 to
+confirm the issue and then increment to test the limits). Furthermore,
+the batch size for some malicious protocols can be reduced with
+``--bucket-size 5``. Every computation thread requires
 separate resources, so consider reducing the number of threads with
 :py:func:`~Compiler.library.for_range_multithreads` and similar.
 Lastly, you can use ``--disk-memory <path>`` to use disk space instead
@@ -92,6 +94,11 @@ Use ``bit_and`` etc. for more elaborate conditions::
   @if_(a.bit_and(b.bit_or(c)))
   def _():
     ...
+
+The underlying reason for this is that registers are only a
+placeholder during the execution in Python, the actual value of which
+is only defined in the virtual machine at a later time. See
+:ref:`journey` to get an understanding of the overall design.
 
 
 Incorrect results when using :py:class:`~Compiler.types.sfix`

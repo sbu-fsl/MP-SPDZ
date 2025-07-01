@@ -5,6 +5,7 @@
 
 #include "OTExtensionWithMatrix.h"
 #include "Tools/Bundle.h"
+#include "Tools/CodeLocations.h"
 
 #ifndef USE_KOS
 #include "Networking/PlayerCtSocket.h"
@@ -129,6 +130,7 @@ void OTExtensionWithMatrix::transfer(int nOTs,
 void OTExtensionWithMatrix::extend(int nOTs_requested,
         const BitVector& newReceiverInput, bool hash)
 {
+    CODE_LOCATION
     protocol_agreement();
 
     if (use_kos())
@@ -249,6 +251,7 @@ void OTExtensionWithMatrix::extend_correlated(const BitVector& newReceiverInput)
 
 void OTExtensionWithMatrix::extend_correlated(int nOTs_requested, const BitVector& newReceiverBits)
 {
+    CODE_LOCATION
 //    if (nOTs % nbaseOTs != 0)
 //        throw invalid_length(); //"nOTs must be a multiple of nbaseOTs\n");
     if (nOTs_requested == 0)

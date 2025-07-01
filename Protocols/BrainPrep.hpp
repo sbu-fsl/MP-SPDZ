@@ -31,6 +31,27 @@ public:
     {
     }
 
+    Zint& operator+=(const Zint& other)
+    {
+        return *this = *this + other;
+    }
+
+    Zint& operator-=(const Zint& other)
+    {
+        return *this = *this - other;
+    }
+
+    // optimized Rep3
+    Zint& operator+=(PRNG& G)
+    {
+        return *this = *this + G.get<Zint>();
+    }
+
+    Zint& operator-=(PRNG& G)
+    {
+        return *this = *this - G.get<Zint>();
+    }
+
     void randomize(PRNG& G, int n = -1)
     {
         (void) n;
@@ -107,6 +128,7 @@ void BrainPrep<T>::basic_setup(Player&)
 template<class T>
 void BrainPrep<T>::buffer_triples()
 {
+    CODE_LOCATION
     if(gfp2::get_ZpD().pr_bit_length
             <= ZProtocol<T>::share_type::clear::N_BITS)
         throw runtime_error(

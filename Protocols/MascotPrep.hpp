@@ -52,6 +52,7 @@ void OTPrep<T>::set_protocol(typename T::Protocol& protocol)
 template<class T>
 void MascotTriplePrep<T>::buffer_triples()
 {
+    CODE_LOCATION
 #ifdef INSECURE
 #ifdef FAKE_MASCOT_TRIPLES
     this->triples.resize(this->triples.size() + OnlineOptions::singleton.batch_size);

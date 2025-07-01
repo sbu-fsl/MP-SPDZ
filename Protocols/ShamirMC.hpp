@@ -93,6 +93,7 @@ void ShamirMC<T>::POpen(vector<typename T::open_type>& values, const vector<T>& 
 template<class T>
 void ShamirMC<T>::exchange(const Player& P)
 {
+    CODE_LOCATION
     vector<bool> my_senders(P.num_players()), my_receivers(P.num_players());
     for (int i = 0; i < P.num_players(); i++)
     {
@@ -158,6 +159,7 @@ typename T::open_type ShamirMC<T>::reconstruct(const vector<open_type>& shares)
 template<class T>
 void IndirectShamirMC<T>::exchange(const Player& P)
 {
+    CODE_LOCATION
     oss.resize(P.num_players());
     int threshold = ShamirMachine::s().threshold;
     if (P.my_num() <= threshold)

@@ -91,7 +91,10 @@ public:
   T& operator^=(const IntBase& other) { return a ^= other.a; }
   T& operator&=(const IntBase& other) { return a &= other.a; }
 
-  IntBase mask(int n) const { return n < N_BITS ? *this & ((1L << n) - 1) : *this; }
+  IntBase mask(int n) const
+  {
+    return n < N_BITS and n > 0 ? *this & ((1L << n) - 1) : *this;
+  }
   void mask(IntBase& res, int n) const { res = mask(n); }
 
   friend ostream& operator<<(ostream& s, const IntBase& x) { x.output(s, true); return s; }
@@ -137,6 +140,10 @@ class Integer : public IntBase<long>
   template<int X, int L>
   Integer(const gfp_<X, L>& x);
   Integer(int128 x) : Integer(x.get_lower()) {}
+  template<class T>
+  Integer(const IntBase<T>& x) : Integer(x.get()) {}
+  template<class T>
+  Integer(const gf2n_<T>& x) : Integer(x.get()) {}
 
   Integer(const Integer& x, int n_bits);
 

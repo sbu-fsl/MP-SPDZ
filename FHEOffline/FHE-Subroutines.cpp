@@ -12,6 +12,7 @@
 template<class T>
 void Commit_And_Open(vector< vector<T> >& data,const Player& P,int num_runs)
 {
+  CODE_LOCATION
   int num_players=P.num_players();
   vector< vector<octetStream> > Comm_data(num_runs, vector<octetStream>(num_players));
   vector<octetStream> Open_data(num_runs);
@@ -29,6 +30,7 @@ void Commit_And_Open(vector< vector<T> >& data,const Player& P,int num_runs)
 template<class T>
 void Transmit_Data(vector< vector<T> >& data,const Player& P,int num_runs)
 {
+  CODE_LOCATION
   int my_number=P.my_num();
   int num_players=P.num_players();
   for (int i=0; i<num_runs; i++)

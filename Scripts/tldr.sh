@@ -3,17 +3,6 @@
 if test `uname` = "Linux"; then
     flags='cat /proc/cpuinfo'
 elif test `uname` = Darwin; then
-    if ! type brew; then
-	echo Do you want me to install Homebrew?
-	echo Press RETURN to continue or any other key to abort
-	read ans
-	if test "$ans"; then
-	    echo Aborting
-	    exit 1
-	else
-	    /bin/bash -c "$(curl -fsSL https://raw.githubusercontent.com/Homebrew/install/HEAD/install.sh)"
-	fi
-    fi
     make mac-setup
     make tldr
 else
@@ -22,8 +11,8 @@ else
 fi
 
 if test "$flags"; then
-    if $flags | grep -q avx2; then
-	cpu=avx2
+    if $flags | grep -q adx; then
+	cpu=adx
     else
 	if test `uname -m` != x86_64; then
 	    echo Binaries are not available for `uname -m`

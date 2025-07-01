@@ -10,6 +10,7 @@
 #include "GC/ShareParty.h"
 #include "BitPrepFiles.h"
 #include "Math/Setup.h"
+#include "Tools/DoubleRange.h"
 
 #include "Processor/Data_Files.hpp"
 
@@ -87,66 +88,161 @@ void ShareThread<T>::check()
 }
 
 template<class T>
+class BitOpTuple
+{
+    size_t n_bits, dest, left, right;
+
+public:
+    static const int n = 4;
+
+    BitOpTuple(vector<int>::const_iterator it) :
+            n_bits(*it++), dest(*it++), left(*it++), right(*it++)
+    {
+    }
+
+    size_t n_blocks()
+    {
+        return DIV_CEIL(n_bits, T::default_length);
+    }
+
+    size_t n_full_blocks()
+    {
+        return n_bits / T::default_length;
+    }
+
+    DoubleRange<T> input_range(StackedVector<T>& S)
+    {
+        return {S, left, right, n_blocks()};
+    }
+
+    DoubleRange<T> full_block_input_range(StackedVector<T>& S)
+    {
+        return {S, left, right, n_full_blocks()};
+    }
+
+    DoubleIterator<T> partial_block(StackedVector<T>& S)
+    {
+        assert(n_blocks() != n_full_blocks());
+        return {S.iterator_for_size(left + n_full_blocks(), 1),
+            S.iterator_for_size(right + n_full_blocks(), 1)};
+    }
+
+    Range<StackedVector<T>> full_block_output_range(StackedVector<T>& S)
+    {
+        return {S, dest, n_full_blocks()};
+    }
+
+    T& partial_output(StackedVector<T>& S)
+    {
+        assert(n_blocks() != n_full_blocks());
+        return S[dest + n_full_blocks()];
+    }
+
+    int last_length()
+    {
+        if (n_blocks() == n_full_blocks())
+            return 0;
+        else
+            return n_bits % T::default_length;
+    }
+};
+
+template<class T>
 void ShareThread<T>::and_(Processor<T>& processor,
         const vector<int>& args, bool repeat)
 {
     auto& protocol = this->protocol;
+    auto& S = processor.S;
     processor.check_args(args, 4);
     protocol->init_mul();
     T x_ext, y_ext;
-    int total_bits = 0;
-    for (size_t i = 0; i < args.size(); i += 4)
+
+    size_t total_bits = 0;
+    for (auto it = args.begin(); it < args.end(); it += 4)
+        total_bits += *it;
+
+    // accept 10 % waste
+    bool fast_mode = 0.1 * total_bits > args.size() / 4 * T::default_length;
+    if (fast_mode)
     {
-        int n_bits = args[i];
-        total_bits += n_bits;
-        int left = args[i + 2];
-        int right = args[i + 3];
-        for (int j = 0; j < DIV_CEIL(n_bits, T::default_length); j++)
-        {
-            int n = min(T::default_length, n_bits - j * T::default_length);
-
-            if (not repeat and n == T::default_length)
-            {
-                protocol->prepare_mul(processor.S[left + j], processor.S[right + j]);
-                continue;
-            }
-
-            processor.S[left + j].mask(x_ext, n);
-            if (repeat)
-                processor.S[right].extend_bit(y_ext, n);
-            else
-                processor.S[right + j].mask(y_ext, n);
-            protocol->prepare_mult(x_ext, y_ext, n, repeat);
-        }
+        protocol->set_fast_mode(true);
     }
 
+    ArgList<BitOpTuple<T>> infos(args);
+
+    if (repeat)
+        for (auto info : infos)
+        {
+            int n = T::default_length;
+            for (auto x : info.full_block_input_range(S))
+            {
+                x.second.extend_bit(y_ext, n);
+                protocol->prepare_mult(x.first, y_ext, n, true);
+            }
+            n = info.last_length();
+            if (n)
+            {
+                info.partial_block(S).left->mask(x_ext, n);
+                info.partial_block(S).right->extend_bit(y_ext, n);
+                protocol->prepare_mult(x_ext, y_ext, n, true);
+            }
+        }
+    else
+        for (auto info : infos)
+        {
+            if (fast_mode)
+                for (auto x : info.full_block_input_range(S))
+                    protocol->prepare_mul_fast(x.first, x.second);
+            else
+                for (auto x : info.full_block_input_range(S))
+                    protocol->prepare_mul(x.first, x.second);
+            int n = info.last_length();
+            if (n)
+            {
+                info.partial_block(S).left->mask(x_ext, n);
+                info.partial_block(S).right->mask(y_ext, n);
+                protocol->prepare_mult(x_ext, y_ext, n, false);
+            }
+        }
+
     if (OnlineOptions::singleton.has_option("verbose_and"))
-        fprintf(stderr, "%d%s ANDs\n", total_bits, repeat ? " repeat" : "");
+        fprintf(stderr, "%zu%s ANDs\n", total_bits, repeat ? " repeat" : "");
 
     protocol->exchange();
 
-    for (size_t i = 0; i < args.size(); i += 4)
-    {
-        int n_bits = args[i];
-        int out = args[i + 1];
-        for (int j = 0; j < DIV_CEIL(n_bits, T::default_length); j++)
+    if (repeat)
+        for (auto info : infos)
         {
-            int n = min(T::default_length, n_bits - j * T::default_length);
-            auto& res = processor.S[out + j];
-
-            if (not repeat and n == T::default_length)
+            int n = T::default_length;
+            for (auto& res : info.full_block_output_range(S))
+                protocol->finalize_mult(res, n);
+            n = info.last_length();
+            if (n)
             {
-                res = protocol->finalize_mul();
-                continue;
+                protocol->finalize_mult(info.partial_output(S), n);
             }
-
-            protocol->finalize_mult(res, n);
-            res.mask(res, n);
         }
-    }
+    else
+        for (auto info : infos)
+        {
+            if (fast_mode)
+                for (auto& res : info.full_block_output_range(S))
+                    res = protocol->finalize_mul_fast();
+            else
+                for (auto& res : info.full_block_output_range(S))
+                    res = protocol->finalize_mul();
+
+            int n = info.last_length();
+            if (n)
+            {
+                protocol->finalize_mult(info.partial_output(S), n);
+            }
+        }
 
     if (OnlineOptions::singleton.has_option("always_check"))
         protocol->check();
+
+    protocol->set_fast_mode(false);
 }
 
 template<class T>
@@ -207,21 +303,23 @@ template<class T>
 void ShareThread<T>::xors(Processor<T>& processor, const vector<int>& args)
 {
     processor.check_args(args, 4);
-    for (size_t i = 0; i < args.size(); i += 4)
+    auto it = args.begin();
+    while (it < args.end())
     {
-        int n_bits = args[i];
-        int out = args[i + 1];
-        int left = args[i + 2];
-        int right = args[i + 3];
+        int n_bits = *it++;
         if (n_bits == 1)
-            processor.S[out].xor_(1, processor.S[left], processor.S[right]);
+            processor.S[*it++].xor_(1, processor.S[*it++], processor.S[*it++]);
         else
-            for (int j = 0; j < DIV_CEIL(n_bits, T::default_length); j++)
-            {
-                int n = min(T::default_length, n_bits - j * T::default_length);
-                processor.S[out + j].xor_(n, processor.S[left + j],
-                        processor.S[right + j]);
-            }
+        {
+            int size = DIV_CEIL(n_bits, T::default_length);
+            auto out = processor.S.iterator_for_size(*it++, size);
+            auto left = processor.S.iterator_for_size(*it++, size);
+            auto right = processor.S.iterator_for_size(*it++, size);
+            for (int j = 0; j < size - 1; j++)
+                (*out++).xor_(T::default_length, *left++, *right++);
+            int n_bits_left = n_bits - (size - 1) * T::default_length;
+            (*out++).xor_(n_bits_left, *left++, *right++);
+        }
     }
 }
 

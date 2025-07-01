@@ -23,6 +23,7 @@ SemiPrep<T>::SemiPrep(SubProcessor<T>* proc, DataPositions& usage) :
 template<class T>
 void SemiPrep<T>::buffer_triples()
 {
+    CODE_LOCATION
     assert(this->triple_generator);
     this->triple_generator->set_batch_size(
             BaseMachine::batch_size<T>(DATA_TRIPLE));
@@ -47,6 +48,7 @@ void SemiPrep<T>::buffer_dabits(ThreadQueues* queues)
 {
     if (bits_from_dabits())
     {
+        CODE_LOCATION
         assert(this->triple_generator);
         this->triple_generator->set_batch_size(
                 BaseMachine::batch_size<T>(DATA_DABIT, this->buffer_size));

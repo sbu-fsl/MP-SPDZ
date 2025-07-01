@@ -37,6 +37,7 @@ public:
 template<class FD>
 Plaintext_<FD>& DistDecrypt<FD>::run(const Ciphertext& ctx, bool NewCiphertext)
 {
+  CODE_LOCATION
   const FHE_Params& params=ctx.get_params();
 
   share.dist_decrypt_1(vv, ctx,P.my_num(),P.num_players());

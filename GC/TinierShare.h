@@ -10,8 +10,16 @@
 #include "Protocols/Share.h"
 #include "Math/Bit.h"
 
+#ifdef LONG_BIT_MAC_KEY
+class gf2n_mac_key : public gf2n_long
+{
+    typedef gf2n_long super;
+#else
 class gf2n_mac_key : public gf2n_short
 {
+    typedef gf2n_short super;
+#endif
+
 public:
     gf2n_mac_key()
     {
@@ -19,7 +27,7 @@ public:
 
     template<class T>
     gf2n_mac_key(const T& other) :
-            gf2n_short(other)
+            super(other)
     {
     }
 };

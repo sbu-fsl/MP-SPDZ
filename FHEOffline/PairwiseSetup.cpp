@@ -175,6 +175,7 @@ template <class FD>
 void PairwiseSetup<FD>::covert_key_generation(Player& P,
         PairwiseMachine& machine, int num_runs)
 {
+    CODE_LOCATION
     vector<SeededPRNG> G(num_runs);
     vector<AllCommitments> commits(num_runs, P);
     vector<FHE_KeyPair> my_keys(num_runs, {params, FieldD.get_prime()});

@@ -542,6 +542,7 @@ void InputProducer<FD>::run(const Player& P, const FHE_PK& pk,
         const Ciphertext& calpha, EncCommitBase_<FD>& EC, DistDecrypt<FD>& dd,
         const T& alphai, int player)
 {
+    CODE_LOCATION
     (void)alphai;
 
     const FHE_Params& params=pk.get_params();

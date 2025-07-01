@@ -22,9 +22,25 @@ hundreds of files), we recommend using an integrated development
 environment (IDE) to navigate it. `Eclipse
 <https://www.eclipse.org/downloads>`_ has very useful features such as
 jumping to the definition of function or variable using F3 or find all
-references to a function or variable with Strg-Shift-g. The latter
+references to a function or variable with Ctrl-Shift-g. The latter
 doesn't work well with templates, however, so global text search is
 necessary for a more comprehensive view.
+
+The virtual machines offer the option ``--code-locations`` to output
+the most relevant locations in the code that are used by
+computation. For example::
+
+  Scripts/compile-run.py ring tutorial -- --code-locations
+
+will output::
+
+  first call to ./Protocols/Replicated.hpp:<lineno>, virtual void Replicated<Rep3Share2<64>>::exchange() [T = Rep3Share2<64>]
+
+This indicates the invocation of the :cpp:func:`exchange` function of
+the Rep3 multiplication protocol. Note that, for efficiency reasons,
+this is the only call of the relevant class that will be
+mentioned. Consult :cpp:class:`ProtocolBase` to see how protocol
+classes operate.
 
 
 Mathematical Domains

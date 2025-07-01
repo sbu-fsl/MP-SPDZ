@@ -37,6 +37,7 @@ void SohoPrep<T>::teardown()
 template<class T>
 void SohoPrep<T>::buffer_triples()
 {
+    CODE_LOCATION
     auto& proc = this->proc;
     assert(proc != 0);
     lock.lock();
@@ -78,7 +79,7 @@ void SohoPrep<T>::buffer_triples()
 template<class T>
 void SohoPrep<T>::buffer_squares()
 {
-
+    CODE_LOCATION
     auto& proc = this->proc;
     assert(proc != 0);
     lock.lock();

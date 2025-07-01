@@ -190,6 +190,7 @@ void TripleShuffleSacrifice<T>::triple_sacrifice(vector<array<T, 3>>& triples,
         vector<array<T, 3>>& check_triples, Player& P,
         typename T::MAC_Check& MC, int begin, int end)
 {
+    CODE_LOCATION
 #ifdef VERBOSE_SHUFFLE
     cerr << "sacrificing triples " << begin << " to " << end << endl;
 #endif

@@ -102,6 +102,7 @@ endif
 
 ifeq ($(OS), Linux)
 LDLIBS += -lrt
+LDLIBS += -z noexecstack
 endif
 
 BOOST = -lboost_thread $(MY_BOOST)

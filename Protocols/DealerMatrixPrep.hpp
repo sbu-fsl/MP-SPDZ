@@ -45,6 +45,7 @@ ShareMatrix<T> receive_shares(octetStream& o, int n, int m)
 template<class T>
 void DealerMatrixPrep<T>::buffer_triples()
 {
+    CODE_LOCATION
     assert(this->prep);
     assert(this->prep->proc);
     auto& P = this->prep->proc->P;

@@ -116,6 +116,7 @@ void HashMaliciousRepMC<T>::Check(const Player& P)
 {
     if (needs_checking)
     {
+        CODE_LOCATION
         vector<octetStream> os(P.num_players());
         hash.final(os[P.my_num()]);
         reset();

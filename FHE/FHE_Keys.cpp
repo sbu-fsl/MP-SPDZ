@@ -3,6 +3,7 @@
 #include "Ciphertext.h"
 #include "P2Data.h"
 #include "FFT_Data.h"
+#include "Tools/CodeLocations.h"
 
 #include "Math/modp.hpp"
 
@@ -65,6 +66,8 @@ void FHE_PK::KeyGen(Rq_Element& sk, PRNG& G, int noise_boost)
 void FHE_PK::partial_key_gen(const Rq_Element& sk, const Rq_Element& a, PRNG& G,
     int noise_boost)
 {
+  CODE_LOCATION
+
   FHE_PK& PK = *this;
 
   a0 = a;
@@ -151,6 +154,8 @@ void FHE_PK::encrypt(Ciphertext& c,
 void FHE_PK::quasi_encrypt(Ciphertext& c,
                            const Rq_Element& mess,const Random_Coins& rc) const
 {
+  CODE_LOCATION
+
   if (&c.get_params()!=params)  { throw params_mismatch(); }
   if (&rc.get_params()!=params) { throw params_mismatch(); }
   assert(pr != 0);
@@ -211,6 +216,8 @@ void FHE_SK::decrypt(Plaintext<T,FD,S>& mess,const Ciphertext& c) const
 
 Rq_Element FHE_SK::quasi_decrypt(const Ciphertext& c) const
 {
+  CODE_LOCATION
+
   if (&c.get_params()!=params)  { throw params_mismatch(); }
 
   auto ans = c.c0() - c.c1() * sk;

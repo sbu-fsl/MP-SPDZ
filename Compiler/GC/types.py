@@ -136,6 +136,10 @@ class bits(Tape.Register, _structure, _bit):
         if util.is_constant(value):
             n = value.bit_length()
         return cls.get_type(n)(value)
+    @classmethod
+    def same_type(cls, size=None):
+        assert size is None or size == math.ceil(self.n / self.unit)
+        return cls()
     def __init__(self, value=None, n=None, size=None):
         assert n == self.n or n is None
         if size != 1 and size is not None:
@@ -163,7 +167,7 @@ class bits(Tape.Register, _structure, _bit):
     def load_other(self, other):
         if isinstance(other, cint):
             assert(self.n == other.size)
-            self.conv_regint_by_bit(self.n, self, other.to_regint(1))
+            self.conv_regint_by_bit(self.n, self, other.to_regint(1, sync=False))
         elif isinstance(other, int):
             self.set_length(self.n or util.int_len(other))
             self.load_int(other)
@@ -284,8 +288,7 @@ class bits(Tape.Register, _structure, _bit):
                  self.bit_compose(source.bit_decompose()[base:base + size]))
     def vector_size(self):
         return self.n
-    @staticmethod
-    def size_for_mem():
+    def size_for_mem(self):
         return 1
 
 class cbits(bits):
@@ -576,7 +579,7 @@ class sbits(bits):
     __rmul__ = __mul__
     def _and(self, other):
         res = self.new(n=self.n)
-        if not isinstance(other, sbits):
+        if not isinstance(other, sbits) and Program.prog.use_mulm:
             other = cbits.get_type(self.n).conv(other)
             inst.andm(self.n, res, self, other)
             return res
@@ -617,7 +620,8 @@ class sbits(bits):
         return res
     def __neg__(self):
         return self
-    def reveal(self):
+    def reveal(self, check=False):
+        assert not check
         if self.n == None or \
            self.n > max(self.max_length, self.clear_type.max_length):
             assert(self.unit == self.clear_type.unit)
@@ -686,6 +690,8 @@ class sbits(bits):
     @staticmethod
     def ripple_carry_adder(*args, **kwargs):
         return sbitint.ripple_carry_adder(*args, **kwargs)
+    def output(self):
+        inst.print_reg_plainsb(self)
 
 class sbitvec(_vec, _bit, _binary):
     """ Vector of registers of secret bits, effectively a matrix of secret bits.
@@ -788,6 +794,8 @@ class sbitvec(_vec, _bit, _binary):
                 instructions_base.check_vector_size(size)
                 if other is not None:
                     if util.is_constant(other):
+                        if util.int_len(other) > n:
+                            raise CompilerError('constant outside domain')
                         t = sbits.get_type(size or 1)
                         self.v = [t(((other >> i) & 1) * ((1 << t.n) - 1))
                                   for i in range(n)]
@@ -840,6 +848,16 @@ class sbitvec(_vec, _bit, _binary):
                 return self.from_vec(x.zero_if_not(condition) for x in self.v)
             def __str__(self):
                 return 'sbitvec(%d)' % n
+            @classmethod
+            def get_random_int(cls, n_bits):
+                assert instructions_base.get_global_vector_size() == 1
+                return cls.from_vec(
+                    [sbit.get_random_bit() for i in range(n_bits)] + \
+                    [0] * (n - n_bits))
+            @staticmethod
+            def get_random_bit():
+                assert instructions_base.get_global_vector_size() == 1
+                return sbit.get_random_bit()
         sbitvecn.basic_type = sbitvecn
         sbitvecn.reg_type = 'sb'
         return sbitvecn
@@ -859,13 +877,14 @@ class sbitvec(_vec, _bit, _binary):
         # any number of rows, limited number of columns
         return cls.combine(cls(row) for row in matrix)
     @classmethod
-    def from_hex(cls, string):
+    def from_hex(cls, string, reverse=True):
         """ Create from hexadecimal string (little-endian). """
         assert len(string) % 2 == 0
         v = []
+        trans = reversed if reverse else list
         for i in range(0, len(string), 2):
             v += [sbit(int(x))
-                  for x in reversed(bin(int(string[i:i + 2], 16))[2:].zfill(8))]
+                  for x in trans(bin(int(string[i:i + 2], 16))[2:].zfill(8))]
         return cls.from_vec(v)
     def __init__(self, elements=None, length=None, input_length=None):
         if length:
@@ -879,10 +898,10 @@ class sbitvec(_vec, _bit, _binary):
                     # force the use of edaBits
                     backup = prog.use_edabit()
                     prog.use_edabit(True)
-                    from Compiler.floatingpoint import BitDecFieldRaw
-                    self.v = BitDecFieldRaw(
+                    self.v = prog.non_linear.bit_dec(
                         elements, max(length, input_length or prog.bit_length),
-                        length, prog.security)
+                        length, maybe_mixed=True)
+                    assert isinstance(self.v[0], sbits)
                     prog.use_edabit(backup)
                     return
                 comparison.require_ring_size(length, 'A2B conversion')

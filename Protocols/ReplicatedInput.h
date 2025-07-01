@@ -10,6 +10,10 @@
 #include "Processor/Processor.h"
 #include "Replicated.h"
 
+template<class T> class Beaver;
+template<class T> class AstraOnlineBase;
+template<class T> class AstraPrepProtocol;
+
 /**
  * Base class for input protocols without preprocessing
  */
@@ -17,7 +21,7 @@ template <class T>
 class PrepLessInput : public InputBase<T>
 {
 protected:
-    PointerVector<T> shares;
+    IteratorVector<T> shares;
 
 public:
     PrepLessInput(SubProcessor<T>* proc) :
@@ -31,7 +35,7 @@ public:
     virtual void finalize_other(int player, T& target, octetStream& o,
             int n_bits = -1) = 0;
 
-    T finalize_mine();
+    T finalize_mine() final;
 };
 
 /**
@@ -46,6 +50,8 @@ class ReplicatedInput : public PrepLessInput<T>
     SeededPRNG secure_prng;
     ReplicatedBase protocol;
     vector<bool> expect;
+    octetStream dest;
+    octetStream* to_send;
 
 public:
     ReplicatedInput(SubProcessor<T>& proc) :
@@ -57,7 +63,8 @@ public:
     {
         (void) MC;
     }
-    ReplicatedInput(typename T::MAC_Check& MC, Preprocessing<T>& prep, Player& P) :
+    ReplicatedInput(typename T::MAC_Check& MC, Preprocessing<T>& prep, Player& P,
+            typename T::Protocol* = 0) :
             ReplicatedInput(P)
     {
         (void) MC, (void) prep;
@@ -68,19 +75,41 @@ public:
     }
     ReplicatedInput(SubProcessor<T>* proc, const ReplicatedBase& protocol) :
             PrepLessInput<T>(proc), proc(proc), P(protocol.P),
-            protocol(protocol.branch())
+            protocol(protocol.branch()), to_send(0)
     {
         assert(T::vector_length == 2);
         expect.resize(P.num_players());
         this->reset_all(P);
     }
+    template<class U>
+    ReplicatedInput(SubProcessor<T>*, const Beaver<U>& protocol) :
+            ReplicatedInput(protocol.P)
+    {
+        throw runtime_error("should not be called");
+    }
+    template<class U>
+    ReplicatedInput(SubProcessor<T>*, const AstraOnlineBase<U>& protocol) :
+            ReplicatedInput(protocol.P)
+    {
+        throw runtime_error("should not be called");
+    }
+    template<class U>
+    ReplicatedInput(SubProcessor<T>* proc, const AstraPrepProtocol<U>& protocol);
 
     void reset(int player);
-    void add_mine(const typename T::open_type& input, int n_bits = -1);
+    void prepare(size_t n_inputs);
+    void add_mine(const typename T::open_type& input, int n_bits = -1) final;
+    void add_mine_prepared(T& share, const typename T::open_type& input);
     void add_other(int player, int n_bits = -1);
     void send_mine();
     void exchange();
     void finalize_other(int player, T& target, octetStream& o, int n_bits = -1);
+    T finalize_offset(int offset);
+
+    double randomness_time()
+    {
+        return protocol.randomness_time();
+    }
 };
 
 #endif /* PROTOCOLS_REPLICATEDINPUT_H_ */

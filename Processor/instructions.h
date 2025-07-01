@@ -68,7 +68,7 @@
     X(PICKS, auto dest = &Procp.get_S()[r[0]]; auto op1 = &Procp.get_S()[r[1] + r[2]], \
             *dest++ = *op1; op1 += int(n)) \
     X(MULM, auto dest = &Procp.get_S()[r[0]]; auto op1 = &Procp.get_S()[r[1]]; \
-            auto op2 = &Procp.get_C()[r[2]], \
+            auto op2 = &Procp.get_C()[r[2]]; mulm_check<sint>(), \
             *dest++ = *op1++ * *op2++) \
     X(MULC, auto dest = &Procp.get_C()[r[0]]; auto op1 = &Procp.get_C()[r[1]]; \
             auto op2 = &Procp.get_C()[r[2]], \
@@ -149,7 +149,7 @@
             auto op2 = &Proc2.get_S()[r[2]], \
             *dest++ = sgf2n::constant(*op1++, Proc.P.my_num(), Proc2.MC.get_alphai()) - *op2++) \
     X(GMULM, auto dest = &Proc2.get_S()[r[0]]; auto op1 = &Proc2.get_S()[r[1]]; \
-            auto op2 = &Proc2.get_C()[r[2]], \
+            auto op2 = &Proc2.get_C()[r[2]]; mulm_check<sgf2n>(), \
             *dest++ = *op1++ * *op2++) \
     X(GMULSI, auto dest = &Proc2.get_S()[r[0]]; auto op1 = &Proc2.get_S()[r[1]]; \
             typename sgf2n::clear op2 = int(n), \
@@ -384,6 +384,16 @@
     X(ACTIVE, throw not_implemented(),) \
     X(FIXINPUT, throw not_implemented(),) \
     X(CONCATS, throw not_implemented(),) \
+    X(ZIPS, throw not_implemented(),) \
+    X(GMATMULS, throw not_implemented(),) \
+    X(GMATMULSM, throw not_implemented(),) \
+    X(PRINTREGPLAINS, throw not_implemented(),) \
+    X(GPRINTREGPLAINS, throw not_implemented(),) \
+    X(CALL_TAPE, throw not_implemented(),) \
+    X(CMDLINEARG, throw not_implemented(),) \
+    X(INITCLIENTCONNECTION, throw not_implemented(),) \
+    X(GWRITEFILESHARE, throw not_implemented(),) \
+    X(GREADFILESHARE, throw not_implemented(),) \
 
 #define ALL_INSTRUCTIONS ARITHMETIC_INSTRUCTIONS REGINT_INSTRUCTIONS \
     CLEAR_GF2N_INSTRUCTIONS REMAINING_INSTRUCTIONS

@@ -9,6 +9,8 @@ Diagonalizer::Diagonalizer(const MatrixVector& matrices,
         const FFT_Data& FTD, const FHE_PK& pk) :
         FTD(FTD)
 {
+    CODE_LOCATION
+
     assert(not matrices.empty());
     for (auto& matrix : matrices)
     {

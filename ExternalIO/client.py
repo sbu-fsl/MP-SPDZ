@@ -190,7 +190,10 @@ class octetStream:
         socket.sendall(self.buf)
 
     def Receive(self, socket):
-        length = struct.unpack('<I', socket.recv(4))[0]
+        buffer = socket.recv(4)
+        if len(buffer) < 4:
+            raise Exception('Error while receiving, check the other side')
+        length = struct.unpack('<I', buffer)[0]
         self.buf = b''
         while len(self.buf) < length:
             self.buf += socket.recv(length - len(self.buf))

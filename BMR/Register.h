@@ -194,6 +194,11 @@ public:
     void set_trace();
 };
 
+inline ostream& operator<<(ostream&, const Register&)
+{
+	throw runtime_error("BMR secret output not implemented");
+}
+
 
 // this is to fake a "cout" that does nothing
 class BlackHole
@@ -221,18 +226,18 @@ public:
 
 	static const bool actual_inputs = true;
 
+	static const bool garbled = true;
+
 	template <class T>
-	static void store_clear_in_dynamic(T& mem, const vector<GC::ClearWriteAccess>& accesses)
-	{ (void)mem; (void)accesses; }
+	static void store_clear_in_dynamic(T&, const vector<GC::ClearWriteAccess>&)
+	{}
 
 	template<class T>
-	static void store(NoMemory& dest,
-			const vector<GC::WriteAccess<T> >& accesses)
-	{ (void)dest; (void)accesses; throw runtime_error("dynamic memory not implemented"); }
+	static void store(NoMemory&, const vector<GC::WriteAccess<T> >&)
+	{ throw no_dynamic_memory(); }
 	template<class T>
-	static void load(vector<GC::ReadAccess<T> >& accesses,
-			const NoMemory& source)
-	{ (void)accesses; (void)source; throw runtime_error("dynamic memory not implemented"); }
+	static void load(vector<GC::ReadAccess<T> >&, const NoMemory&)
+	{ throw no_dynamic_memory(); }
 
 	template <class T>
 	static void andrs(T& processor, const vector<int>& args) { processor.andrs(args); }
@@ -265,7 +270,16 @@ public:
 	void output() {}
 };
 
-class NoOpInputter
+class InputterBase
+{
+public:
+    static bool is_me(int player, int my_num)
+    {
+        return player == my_num;
+    }
+};
+
+class NoOpInputter : public InputterBase
 {
 public:
 	PointerVector<char> inputs;
@@ -337,7 +351,7 @@ public:
 class ProgramParty;
 class EvalRegister;
 
-class EvalInputter
+class EvalInputter : public InputterBase
 {
 	class Tuple
 	{

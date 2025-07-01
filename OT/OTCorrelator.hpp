@@ -69,6 +69,7 @@ template <class U>
 void OTCorrelator<U>::correlate(int start, int slice,
         BitVector& newReceiverInput, bool useConstantBase, int repeat)
 {
+    CODE_LOCATION
     vector<octetStream> os(2);
 
     Slice<U> receiverOutputSlice(receiverOutputMatrix, start, slice);
