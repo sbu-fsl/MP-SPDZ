@@ -1,0 +1,60 @@
+# Remember to input values in Player-Data/ before running!
+# example input:
+# echo 65 > Player-Data/Input-P0-0
+# echo 72 > Player-Data/Input-P1-0
+# echo 97 > Player-Data/Input-P2-0
+
+a = sint.get_input_from(0)
+b = sint.get_input_from(1)
+c = sint.get_input_from(2)
+
+# We want to know whether any permutation of (a,b,c) is a Pythagorean triple
+# abc,acb,... are all of type sbitint, which is a subclass of sint.
+# This is because '==' is implemented by https://mp-spdz.readthedocs.io/en/latest/Compiler.html#Compiler.types.sint.equal, which outputs an sbitint
+abc = (a**2 + b**2) == c**2
+acb = (a**2 + c**2) == b**2
+bac = (b**2 + a**2) == c**2 
+bca = (b**2 + c**2) == a**2
+cab = (c**2 + a**2) == b**2
+
+# is_triple = abc or acb or bac or bca or cab # ERROR https://mp-spdz.readthedocs.io/en/latest/troubleshooting.html#cannot-derive-truth-value-from-register
+# this was a silly mistake on my part. is_triple is an sbitint, not a bool value, so 'or' doesn't make sense anyway. Use bitwise or '|' instead.
+is_triple = abc | acb | bac | bca | cab
+# print_ln("is_triple: %s", is_triple.reveal()) # Works!
+
+# Conditionals are a little tricky! I wanted a prettier printout depending on is_triple, but ran into many errors...
+
+# Attempt 1: Naive attempt
+# ERROR: https://mp-spdz.readthedocs.io/en/latest/troubleshooting.html#cannot-derive-truth-value-from-register
+# if (is_triple):
+#     print_ln("Parties DO hold a Pythagorean triple")
+# else:
+#     print_ln("Parties do NOT hold a Pythagorean triple")
+
+# Attempt 2: maybe if we reveal is_triple first?
+# ERROR: same as above. Turns out can't use branching on run-time data types from MP-SPDZ, secret or not. sint.reveal returns a cint
+# if (is_triple.reveal()):
+#     print_ln("Parties DO hold a Pythagorean triple")
+# else:
+#     print_ln("Parties do NOT hold a Pythagorean triple")
+
+# Attempt 3: compiler provides some special control flow commands. Maybe these will work?
+# ERROR: 
+# 'cannot branch on secret values, use if_else instead: '
+# 'https://mp-spdz.readthedocs.io/en/latest/Compiler.html#Compiler.types.sint.if_else')
+# @if_e(is_triple)
+# def _():
+#     print_ln("Parties DO hold a Pythagorean triple")
+# @else_
+# def _():
+#     print_ln("Parties do NOT hold a Pythagorean triple")
+
+# Attempt 4: Going to ignore Attempt 3 advice (use sint.if_else) and try again but reveal is_triple this time.
+# Works!
+@if_e(is_triple.reveal())
+def _():
+    print_ln("Parties DO hold a Pythagorean triple")
+@else_
+def _():
+    print_ln("Parties do NOT hold a Pythagorean triple")
+

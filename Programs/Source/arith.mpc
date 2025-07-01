@@ -1,0 +1,76 @@
+import math
+import mpc_math
+
+a = sint(1)
+b = sint(2)
+c = a.field_div(b)
+# print_ln("c=%s", c.reveal()) # -85070591730234615865843651857942953984, 128 bit number, without sign.
+# aa = c * b
+# print_ln("aa=%s", aa.reveal()) # 1
+
+# d = cint(1)
+# e = cint(2)
+# f = d.field_div(e)
+# print_ln("f=%s", f.reveal())
+
+# print_ln("prime=%s", program.prime) # None
+# # https://github.com/data61/MP-SPDZ/issues/271 looks like default prime is 128 bits. Where is it though? Seems like determined at runtime?
+# print_ln("security=%s", program.security)
+
+# TODO: understand how prime is generated/set, and how to safely change it. 
+
+#### decimal numbers ####
+a = cint(4)
+b =  5 / a
+print_ln("b=%s", b)
+print_ln("cfix.f=%s, cfix.k=%s", cfix.f, cfix.k)
+print_ln("b.v=%s, b.f=%s, b.k=%s", b.v, b.f, b.k)
+
+def floor(x):
+    '''
+    Rounds an sfix/cfix down to the nearest integer value.
+
+    :param x: sfix/cfix
+    :returns: sint if x is secret, else cint. 
+    '''
+    return x.v >> x.f
+
+def ceil(x):
+    '''
+    Rounds an sfix/cfix up to the nearest integer value.
+
+    :param x: sfix/cfix
+    :returns sint if x is secret, else cint. 
+    '''
+    return floor(x) + 1
+
+c = cfix(25.432)
+d = floor(c)
+print_ln("d=%s", d)
+
+e = cfix(12.34)
+f = mpc_math.trunc(e) # only works for secret fix/float types!
+print_ln("f=%s", f)
+
+## Can we have an Array of more than just basic types? Nope.
+
+class LRShare:
+    def __init__(self, eval_point, source, seed_share):
+        self.eval_point = eval_point
+        self.source = source
+        self.seed_share = seed_share
+
+eval_point_1 = cint(1)
+source_1 = Array(3, cint).assign_all(1)
+seed_share_1 = Array(3, cint).assign_all(1)
+lrs_1 = LRShare(eval_point_1, source_1, seed_share_1)
+
+eval_point_2 = cint(2)
+source_2 = Array(3, cint).assign_all(2)
+seed_share_2 = Array(3, cint).assign_all(2)
+lrs_2 = LRShare(eval_point_2, source_2, seed_share_2)
+
+larr = Array(2, LRShare)
+larr[0] = lrs_1
+larr[1] = lrs_2
+print_ln("larr=%s", larr)

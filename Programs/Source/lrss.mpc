@@ -1,0 +1,622 @@
+import math
+from Compiler import mpc_math # import mpc_math works too. 
+
+#### Constants ####
+PRIME_MODULUS = program.prime # ./compile.py -P 170141183460469231731687303715884105727 -F 64 lrss // this successfully sets the prime.
+PRIME_MODULUS_BIT_LENGTH = math.ceil(math.log2(PRIME_MODULUS))
+# https://t5k.org/lists/2small/ for primes close to power of two of certain bit length
+# 170141183460469231731687303715884105727 2^127 - 1
+# 115792089237316195423570985008687907853269984665640564039457584007913129639747 2^256 - 189
+# compiling with prime larger than 256 bits requires CONFIG.MINE edits and make clean :(
+# 6864797660130609714981900799081393217269435300143305409394463459185543183397656052122559640661454554977296311391480858037121987999716643812574028291115057151 2^521 - 1
+
+#### Testing configs ####
+
+TEST_LU = True
+TEST_VANDERMONDE = False
+TEST_TOEPLITZ = False
+TEST_SHAMIR = False
+TEST_LRSS = False
+
+#### Utility functions ####
+
+def floor(x):
+    '''
+    Rounds a decimal number down to the nearest integer value.
+
+    :param x: sfix/cfix
+    :returns sint if x is secret, else cint. 
+    '''
+    return x.v >> x.f
+
+def ceil(x):
+    '''
+    Rounds an sfix/cfix up to the nearest integer value.
+
+    :param x: sfix/cfix
+    :returns sint if x is secret, else cint. 
+    '''
+    return floor(x) + 1
+
+#### LU Decomposition and linear solvers ####
+
+class LUSolver:
+    '''
+    Perform LU decomposition and solve linear systems.
+
+    :param M: arbitrary Matrix to decompose
+
+    WARNING: the LU decomposition procedure (which is performed at instantiation, or with static method lu) may reveal up to 
+    a bit of information for each element on or below the diagonal of M.
+    '''
+
+    def __init__(self, M):
+        self.M = M # store unmodified original M
+        M_copy = Matrix.create_from(M)
+        self.P, self.L, self.U = LUSolver.lu(M_copy) # modifies M_copy in place. 
+
+    @staticmethod
+    def lu(M):
+        '''
+        Compute the LUP decomposition of M: PM = LU. See https://en.wikipedia.org/wiki/LU_decomposition. Modifies M in place.
+        Return P,L,U
+
+        WARNING: the LU decomposition procedure (which is performed at instantiation, or with static method lu) may reveal up to 
+        a bit of information for each element on or below the diagonal of M.
+        '''
+
+        def swap_rows(M, i, j):
+            '''Swap rows i and j of matrix M in place'''
+            # need deeper copy than just tmp = M[i]
+            tmp = M[i].same_shape()
+            tmp.assign(M[i])
+            M[i] = M[j]
+            M[j] = tmp
+
+        def create_identity_matrix(n, value_type):
+            I = Matrix(n,n,value_type)
+            I.assign_all(0)
+            @for_range(n)
+            def _(i):
+                I[i][i] = 1
+            return I
+        
+        # LU procedure is basically identical to Gaussian elimination, except information about the Gaussian elimination process gets "stored" in P and L. 
+        (num_rows, num_cols) = (M.sizes[0], M.sizes[1])
+        P = create_identity_matrix(num_rows, M.value_type)
+        L = create_identity_matrix(num_rows, M.value_type)
+
+        h = cint(0) # pivot row
+        k = cint(0) # pivot col
+        @while_do(lambda: (h < num_rows) & (k < num_cols))
+        def _():
+            # print_ln("h=%s, k=%s, M=%s", h, k, M.reveal())
+            # choose a pivot by finding non-zero element in column k, and swapping its row with row h.
+            @for_range(h, num_rows)
+            def _(i):
+                @if_((M[i][k] != 0).reveal()) # WARNING: revealing information about M
+                def _():
+                    swap_rows(M, h, i)
+                    swap_rows(P, h, i)
+                    break_loop()
+            # if no pivot exists, pass to next column
+            @if_e((M[h][k] == 0).reveal()) # WARNING: revealing information about M
+            def _():
+                k.update(k+1)
+            # for all rows below the pivot, zero out elements in column below pivot using row ops
+            @else_
+            def _():
+                @for_range(h+1, num_rows)
+                def _(i):
+                    scale_factor = M[i][k].field_div(M[h][k])
+                    L[i][k] = scale_factor
+                    @for_range(k, num_cols)
+                    def _(j):
+                        M[i][j] = M[i][j] - (M[h][j] * scale_factor)
+                # increase pivot row and column
+                h.update(h+1)
+                k.update(k+1)
+            return 1 # keep looping
+        # print_ln("P=%s\nL=%s\nU=%s", P.reveal(), L.reveal(), M.reveal())
+        return (P,L,M)
+
+    def solve(self, b, free_vars=None):
+        '''
+        Solve the system Mx = b for x, where M = self.M is the matrix passed into the constructor. 
+
+        :param b: Array of appropriate length
+        :param free_vars: If system has more than one solution, free_vars is used to set the values of the free variables. 
+            - If free_vars=None (default), then assign 0 to every free variable
+            - Else if free_vars="rand", then assign a random value to every free variable
+            - Else, assign free_vars[i] to the i-th free variable
+            
+        :returns: Array of appropriate length. If no solution exists, this Array is filled with False.
+
+        WARNING: May reveal up to a bit of information for each element of b
+        '''
+        assert b.length == self.M.sizes[0]
+        y = self._solve_lower(b) # must be the case that this always has a solution
+        x = self._solve_upper(y, free_vars)
+        return x
+
+    def _solve_lower(self, b):
+        '''
+        Solve the system Ly = Pb for y with forward substitution, where L = self.L and P = self.P are obtained from 
+        LU decomposition of self.M. In particular, this means L is a square lower triangular matrix 
+        with ones on the diagonal. This means the system will always have a unique solution. 
+
+        :param b: Array of appropriate length
+        :returns: Array of appropriate length
+        '''
+        # initialize vars
+        P = self.P
+        L = self.L
+        b = P.dot(b) # apply permutation to b
+        num_rows = L.sizes[0] # L is square
+        y = Array(num_rows, b.value_type).assign_all(0) # solution vector
+        # begin forward substitution
+        @for_range(num_rows)
+        def _(i):
+            # compute y[i] = ( b[i] - \sum_{j < i} L[i][j] * y[j] ) / L[i][i]
+            y[i] = b[i] 
+            @for_range(i) # for all j < i ...
+            def _(j):
+                y[i] = y[i] - ( L[i][j] * y[j] )
+            y[i] = y[i].field_div(L[i][i])
+        return y
+
+    def _solve_upper(self, y, free_vars):
+        '''
+        Solve the system Ux = y for x with backsubstitution, where U = self.U is the row-echelon form matrix obtained from LU decomposition of self.M.
+
+        In the case that the system has no solution, return an Array filled with False.
+
+        In the case that the system has more than one solution, use free_vars to assign values to the free variables.
+            - If free_vars=None, then assign 0 to every free variable
+            - Else if free_vars="rand", then assign a random value to every free variable
+            - Else, assign free_vars[i] to the i-th free variable
+        '''
+        U = self.U
+        num_rows, num_cols = U.sizes[0], U.sizes[1]
+        # initialize solution vector x
+        if free_vars is None:
+            x = Array(num_cols, y.value_type).assign_all(0)
+        elif free_vars == "rand":
+            x = Array(num_cols, y.value_type)
+            x.randomize()
+        else:
+            x = Array(num_cols, y.value_type).assign(free_vars)
+
+        # the while loop below sets the following three variables
+        last_non_zero_row_idx = cint(num_rows - 1) # index of the last non-zero row in U
+        last_pivot_idx = cint(-1) # if we find a non-zero row, we will find a pivot in that row. 
+        is_unsolvable = sint(0) # boolean flag for whether solution exists. 
+        @while_do(lambda: last_non_zero_row_idx >= 0)
+        def _():
+            # test U[last_non_zero_row_idx] to see if it is all zeroes
+            @for_range(last_non_zero_row_idx, num_cols) # we assume U is row echelon form (upper triangular), so only need to check from diagonal and to the right
+            def _(j):
+                @if_((U[last_non_zero_row_idx][j] != 0).reveal()) # WARNING: leaks info about U
+                def _():
+                    last_pivot_idx.update(j)
+                    break_loop()
+            # if we found a non-zero element, break
+            @if_(last_pivot_idx != -1)
+            def _():
+                break_loop()
+            # U[last_non_zero_row_idx] is all zeros. If y[last_non_zero_row_idx] != 0, then unsolvable system
+            @if_((y[last_non_zero_row_idx] != 0).reveal()) # WARNING: reveals a bit of information about y
+            def _():
+                is_unsolvable.update(1)
+                break_loop()
+            # U[last_non_zero_row_idx] is all zeros, but system is still solvable. Go up one row.
+            last_non_zero_row_idx.update(last_non_zero_row_idx - 1)
+        # print_ln("last_non_zero_row_idx=%s, last_pivot_idx=%s, is_unsolvable=%s", last_non_zero_row_idx, last_pivot_idx, is_unsolvable.reveal())
+        # check to see if no solution exists
+        @if_e(is_unsolvable.reveal())
+        def _():
+            x.assign_all(False) # TODO: could we instead just return False?
+        @else_
+        def _():
+            # It is possible U is all zeros, so any vector is vacuously a solution. We return free_vars.
+            @if_e(last_non_zero_row_idx == -1)
+            def _():
+                pass
+            @else_
+            # at this point, we must have a valid pivot in U[last_non_zero_row_idx][last_pivot_idx], and a solution is guaranteed to exist. 
+            # notice that valid pivots only exist on the diagonal, so U[last_non_zero_row_idx][last_pivot_idx] = U[last_pivot_idx][last_pivot_idx] and we can forget about last_non_zero_row_idx
+            # begin backsubstitution.
+            def _():
+                @for_range(last_pivot_idx, -1, -1)
+                def _(i):
+                    # compute x[i] = ( y[i] - \sum_{j > i}{ U[i][j] * x[j] } ) / U[i][i]
+                    x[i] = y[i]
+                    @for_range(i + 1, num_cols)
+                    def _(j):
+                        x[i] = x[i] - ( U[i][j] * x[j]) 
+                    x[i] = x[i].field_div(U[i][i])
+        return x
+        
+#### Test LUSolver ####
+
+if TEST_LU:
+    print_ln("LU TESTS")
+    m = [
+        [0, 3, 6],
+        [1, 4, 7],
+        [2, 5, 8]
+    ]
+    M = sint.Matrix(3,3)
+    M.assign(m)
+    # print_ln("M=%s\n", M.reveal())
+
+    print_ln("----Test 1----")
+    # find a preimage of b under M when we know a preimage (x) exists. 
+    # The preimage that is returned may not be x, and that is okay. This just means M is not a bijection.
+    x = sint.Array(3)
+    x.assign([1, 2, 3])
+    b = M.dot(x)
+    print_ln("b=%s", b.reveal())
+    solver = LUSolver(M)
+    preimage = solver.solve(b)
+    print_ln("preimage of b=%s under M=%s is %s", b.reveal(), M.reveal(), preimage.reveal())
+    print_ln("check against b: M * preimage = %s\n", M.dot(preimage).reveal())
+
+    print_ln("----Test 2----")
+    # given a vector, find its preimage under M, if it exists
+    b = Array(3, sint).assign([4, 5, 6])
+    preimage = solver.solve(b)
+    print_ln("preimage of b=%s under M=%s is %s", b.reveal(), M.reveal(), preimage.reveal())
+    print_ln("check against b: M * preimage = %s\n", M.dot(preimage).reveal())
+
+    print_ln("----Test 3----")
+    # find a random element of the kernel (preimage of 0 under M)
+    b = Array(3, sint).assign([0,0,0])
+    preimage = solver.solve(b, free_vars="rand")
+    print_ln("preimage of b=%s under M=%s is %s", b.reveal(), M.reveal(), preimage.reveal())
+    print_ln("check against b: M * preimage = %s\n", M.dot(preimage).reveal())
+
+    print_ln("----Test 4----")
+    # buggy case from Shamir test 1
+    m = [[1, 1, 1], [1, 2, 4], [1, 3, 9]]
+    M = cint.Matrix(3,3)
+    M.assign(m)
+    solver = LUSolver(M)
+    b = Array(3, sint).assign([17, 22, 27])
+    preimage = solver.solve(b)
+    print_ln("preimage of b=%s under M=%s is %s", b.reveal(), M.reveal(), preimage.reveal())
+    print_ln("check against b: M * preimage = %s\n", M.dot(preimage).reveal())
+
+    print_ln("----Test 5----")
+    # solving for random dot product - relevant to CKOS22 LRSS impl
+    m = [1, 2]
+    M = sint.Matrix(1, 2)
+    M[0].assign(m)
+    solver = LUSolver(M)
+    b = Array(1, sint).assign([6])
+    preimage = solver.solve(b, free_vars='rand')
+    print_ln("preimage of b=%s under M=%s is %s", b.reveal(), M.reveal(), preimage.reveal())
+    print_ln("check against b: M * preimage = %s\n", M.dot(preimage).reveal())
+
+#### Vandermonde Matrices #### 
+
+def create_vandermonde_matrix(num_eval_points, degree, value_type, eval_points=None):
+    '''
+    Creates a Vandermonde matrix from the given parameters. Recall that a Vandermonde 
+    matrix V allows for evaluation of a polynomial p at multiple points via matrix multiplication.
+    We choose to support right multiplication: given a Vandermonde matrix V over evaluation points 
+    x_1,...,x_n,  and a column matrix P of coefficients c_1,...,c_{d+1} corresponding to a degree 
+    d polynomial p, the matrix multiplication V*P yields a size n column matrix with the points
+    p(x_1),...,p(x_n).
+
+    :param num_eval_points: Number of evaluation points the Vandermonde matrix supports.
+    :param degree: Polynomial degree the Vandermonde matrix supports. 
+    :param value_type: Run-time data type of entries (e.g., sint, cint)
+    :param eval_pts: Optional Array of explicit evaluation points. Value type must match :param value_type
+    - If given, the length of the list must equal :param num_eval_points
+    - If eval_pts=None, we default to eval_pts=[1,...,num_eval_points]. Note these integers will be interpreted according to the computation domain.
+
+    :returns: A Vandermonde matrix with :param num_eval_points rows and :param degree + 1 columns.
+    '''
+    if eval_points is None:
+        eval_points = Array(num_eval_points, value_type).assign([i for i in range(1,num_eval_points+1)])
+    else:
+        assert eval_points.value_type == value_type 
+        assert eval_points.length == num_eval_points
+    
+    V = Matrix(num_eval_points, degree + 1, value_type)
+    @for_range(num_eval_points)
+    def _(i):
+        V[i][0] = value_type(1)
+        @for_range(1,degree+1)
+        def _(j):
+            V[i][j] = V[i][j-1] * eval_points[i]
+    # print_ln("V=%s", V.reveal())
+    return V
+
+#### Test create_vandermonde_matrix() ####
+if TEST_VANDERMONDE:
+    print_ln("VANDERMONDE TESTS")
+    print_ln("----Test 1----")
+    # test square matrix with defaults
+    V = create_vandermonde_matrix(3, 3, sint)
+    print_ln("V=%s\n", V.reveal())
+
+    print_ln("----Test 2----")
+    # test wide matrix with defaults
+    V = create_vandermonde_matrix(3, 5, sint)
+    print_ln("V=%s\n", V.reveal())
+
+    print_ln("----Test 3----")
+    # test tall matrix with defaults
+    V = create_vandermonde_matrix(5, 3, sint)
+    print_ln("V=%s\n", V.reveal())
+
+    print_ln("----Test 4----")
+    # test square matrix with explicit evaluation points
+    eval_points = sint.Array(3)
+    eval_points.assign([3,5,7])
+    V = create_vandermonde_matrix(3, 3, sint, eval_points=eval_points)
+    print_ln("V=%s\n", V.reveal())
+
+    print_ln("----Test 5----")
+    # test 3x2 vandermonde
+    V = create_vandermonde_matrix(3,1,cint)
+    print_ln("V=%s\n", V.reveal())
+
+#### Toeplitz Matrices ####
+
+def create_toeplitz_matrix(num_rows, num_cols, value_type, values):
+    '''
+    A Toeplitz matrix T is constant on its diagonals, i.e. T[i][j] = T[i+1][j+1] for all i,j. 
+    :param num_rows: Number of rows in Topelitz matrix
+    :param num_cols: Number of columns in Toeplitz matrix
+    :param value_type: Run-time data type of entries (e.g., sint, cint)
+    :param values: Array of Toeplitz matrix constants. The Array's length must match num_rows + num_cols - 1.
+    :return: num_rows by num_cols Matrix of value_type with constants specified by values
+    '''
+    assert values.length == num_rows + num_cols - 1 and values.value_type == value_type
+
+    if TEST_TOEPLITZ:
+        print_ln("values=%s", values.reveal())
+
+    T = Matrix(num_rows, num_cols, value_type)
+    @for_range(num_rows)
+    def _(i):
+        @for_range(i+1) # for j <= i
+        def _(j):
+            T[i][j] = values[i-j]
+        # print_ln("lower T=%s\n", T.reveal())
+        @for_range(i+1, num_cols) # for j > i
+        def _(j):
+            T[i][j] = values[num_rows + j - i - 1]
+        # print_ln("upper T=%s\n", T.reveal())
+    return T
+
+#### Test create_toeplitz_matrix() ####
+if TEST_TOEPLITZ:
+    print_ln("----Test 1----")
+    # test square with random values
+    values = Array(5, sint)
+    values.randomize()
+    T = create_toeplitz_matrix(3, 3, sint, values)
+    print_ln("T=%s\n", T.reveal())
+
+    print_ln("----Test 2----")
+    # test square with explicit values
+    values = Array(5, sint).assign([1,2,3,4,5])
+    T = create_toeplitz_matrix(3, 3, sint, values)
+    print_ln("T=%s\n", T.reveal())
+
+    print_ln("----Test 3----")
+    # test wide with explicit values
+    values = Array(7, sint).assign([1,2,3,4,5,6,7])
+    T = create_toeplitz_matrix(3, 5, sint, values)
+    print_ln("T=%s\n", T.reveal())
+
+#### Shamir secret sharing ####
+
+def shamir_share(msg, threshold, num_parties, eval_points=None, rand=None):
+    '''
+    Perform textbook Shamir's secret sharing
+
+    :param msg: Secret message to be secret shared, numerical type interpreted according to computation domain (e.g., prime field for arithmetic circuit domain).
+    :param threshold: Reconstruction / privacy threshold. Must be less than num_parties.
+    :param num_parties: Number of shareholders.
+    :param eval_pts: Optional public Array of explicit evaluation points.
+    - If given, the length of the list must equal :param num_parties
+    - If eval_pts=None, we default to eval_pts=[1,...,num_parties]. Note these integers will be interpreted according to the computation domain.
+    :param rand: Optional secret Array of random coefficients to use. Length must equal threshold
+    
+    :returns: A 2-tuple, where the first item holds evaluation points, and the second iten holds corresponding polynomial evaluations. 
+    In other words, if we have (eval_points, poly_evals) = shamir_share(...), then (eval_points[i], poly_evals[i]) is the i-th Shamir 
+    share of the form (x, p(x))
+    '''
+    assert threshold <= num_parties
+    if eval_points is None:
+        eval_points = Array(num_parties, sint).assign([i for i in range(1,num_parties+1)]) # TODO: do we need sint if we return eval_points as part of tuple?
+    
+    V = create_vandermonde_matrix(num_parties, threshold - 1, sint, eval_points)
+    poly_coeffs = Array(threshold, sint)
+    if rand:
+        poly_coeffs.assign(rand)
+    else:
+        poly_coeffs.randomize()
+    poly_coeffs[0] = msg
+    poly_evals = V.dot(poly_coeffs)
+    # shares = Matrix(2, num_parties, sint)
+    # shares[0] = eval_points
+    # shares[1] = poly_evals
+    return eval_points, poly_evals
+
+def shamir_reconstruct(eval_points, poly_evals):
+    '''
+    Attempts best-effort reconstruction of Shamir secret shares from :param shares
+    
+    :param eval_points: Evaluation points used during the sharing phase. 
+    :param poly_evals: Polynomial evaluations corresponding to :param eval_points. 
+    In other words, (eval_points[i], poly_evals[i]) is a single Shamir secret share of the form (x, p(x))
+    :returns: A reconstructed secret, interpreted as a field element in the computation domain
+    '''
+    V = create_vandermonde_matrix(eval_points.length, eval_points.length - 1, cint)
+    solver = LUSolver(V)
+    poly_coeffs = solver.solve(poly_evals)
+    return poly_coeffs[0]
+
+#### Test Shamir secret sharing ####
+if TEST_SHAMIR:
+    print_ln("SHAMIR TESTS")
+    print_ln("----Test 1----")
+    msg = sint(12)
+    rand = sint.Array(2).assign([4, 5])
+    print_ln("msg=%s", msg.reveal())
+    eval_points, poly_evals = shamir_share(msg, 2, 3, rand=rand)
+    print_ln("eval_points=%s \npoly_evals=%s", eval_points.reveal(), poly_evals.reveal())
+    reconstructed_msg = shamir_reconstruct(eval_points, poly_evals)
+    print_ln("reconstructed_msg=%s", reconstructed_msg.reveal())
+
+
+#### CKOS22 LRSS ####
+
+def lr_share(msg, threshold, num_parties, leakage_budget, leakage_error):
+    '''
+    LRShare algorithm of CKOS22 leakage-resilient secret sharing scheme.
+    https://eprint.iacr.org/2022/216
+    We hardcode Shamir's secret sharing for MShare and SdShare.
+    The consequence is that the resulting LRSS scheme enjoys perfect privacy and perfect local uniformity, 
+    and we can easily set the leakage error with a single parameter :param leakage_error.
+
+    :param msg: Secret message to be secret shared, numerical type interpreted according to computation domain (e.g., prime field for arithmetic circuit domain).
+    :param threshold: Reconstruction / privacy threshold. Must be less than num_parties.
+    :param num_parties: Number of shareholders.
+    :param leakage_budget: Amount of leakage (in bits) from each share the scheme should support (see mu in CKOS22)
+    :param leakage_error: For any leakage function f in the local leakage family specified by :param leakage_budget, 
+        and for any two messages m, m', :param leakage_error is the maximum possible statistical distance between f(Share(m)) and f(Share(m')) (see epsilon_lr in CKOS22).
+    
+    :returns: Leakage-resilient secret shares as a 3-tuple. The first item in the tuple is an Array of evaluation points. These are the evaluation points
+    used in every invocation of Shamir's secret sharing within the LRSS scheme. 
+    The second item is a Matrix of extractor "sources" (w_i in CKOS22). Each of the :param num_parties rows corresponds to a 
+    different w_i. 
+    The third item is a Matrix of Shamir shares of the seed. Each of the :param num_parties rows corresponds to a different seed share. 
+    The i-th LRSS share is the concatenation of the i-th coordinate of each item in the returned tuple. That is, if we have 
+    (eval_points, sources, seed_shares) = lr_share(...), then (eval_points[i], sources[i], seed_shares[i]) is the i-th LRSS share. 
+    
+    '''
+    
+    #first Shamir secret share msg 
+    eval_points, msg_shares = shamir_share(msg, threshold, num_parties)
+    
+    # The next step is supposed to be generating a random seed for use with InvExt. But how long is this seed supposed to be?:
+    # Because our extractor output should be a single field element, i.e. l = 1 * log |F|,
+    # then by rules of matrix multiplication our seed length d = n = source length. 
+    # (In other words, our extractor is just a dot product where one of the vectors is a random seed)
+    # To determine source length, we have to determine a bunch of other parameters, starting with the extractor error.
+    # NOTE: the following params need to be computed at compile-time (i.e., with normal python types) because sizes of Container types depend on these. 
+    ext_error = leakage_error / (6 * num_parties) # see theorem 1 CKOS22
+    # By leftover hash lemma, we must have min_entropy >= l + 2log(1/ext_error) - 2 = log|F| + 2log(1/ext_error) - 2
+    min_entropy = PRIME_MODULUS_BIT_LENGTH + 2 * math.log2(1 / ext_error) - 2 
+    # In CKOS22, source length in bits is equal to min_entropy + leakage_budget + 1. Why is this?:
+    # First notice our source must retain at least 'min_entropy' bits of min-entropy in order for our extractor to be secure by leftover hash lemma. 
+    # Second, notice the source is output as part of the final secret share, so it will be subject to leakage, and it must retain the 
+    # required min-entropy even AFTER the leakage, so we are at least forced to increase the length by leakage_budget bits.
+    # Finally, notice when we actually sample the source below by solving a linear system with one equation in source_length unknowns,
+    # there are (source_length - 1) free variables that we set to random field elements. 
+    # This is because exactly one variable is determined by the system, so this variable does not contribute any entropy to the source.
+    # As a result, we add 1 to the source length in order to get a source with min-entropy (min_entropy + leakage_budget). 
+    # This way, no matter how the adversary attains leakage_budget bits of information from the source, its min-entropy can only decrease
+    # by at most leakage_budget bits.
+    # Also, for us, source_length must correspond to a number of field elements, so divide by log|F| and round up.
+    source_length = math.ceil( (min_entropy + leakage_budget) / PRIME_MODULUS_BIT_LENGTH )
+    seed_length = source_length
+
+    # generate random secret seed
+    seed = Matrix(1, seed_length, sint) # needs to be Matrix if using LUSolver
+    seed.randomize()
+    # print_ln("seed=%s", seed.reveal())
+
+    # run InvExt on each msg share (just the p(x) part - 2nd row) to obtain source w_i. Collect {w_i} into sources
+    # NOTE: because we are using inner product extractor, every share must have a preimage, so no need to check for failures in InvExt.
+    # NOTE: if above is true and always exists a solution, then might be able to get same leakage_error with bigger ext_error => potentially smaller seed
+    sources = Matrix(num_parties, source_length, sint)
+    seed_solver = LUSolver(seed)
+    @for_range(num_parties)
+    def _(i):
+        sources[i] = seed_solver.solve( Array(1, sint).assign_all(msg_shares[i]), free_vars='rand') 
+    
+    # Shamir secret share the seed. Use same eval points as msg
+    seed_shares_T = Matrix(seed_length, num_parties, sint) # _T to indicate we will transpose this later
+    @for_range(seed_length)
+    def _(i):
+        seed_shares_T[i] = shamir_share(seed[0][i], 2, num_parties, eval_points)[1]
+    seed_shares = seed_shares_T.transpose() # num_parties x seed_length. i-th row of seed_shares is now the i-th "share" of the seed that goes into i-th LRSS share. Corresponds to i-th eval point.
+    
+    return eval_points, sources, seed_shares # i-th LRSS share is collection of i-th coord of each of these
+
+def lr_reconstruct(eval_points, sources, seed_shares):
+    '''
+    Attempts best-effort reconstruction of LRSS shares. 
+
+    :param eval_points: Array of evaluation points used in every invocation of Shamir's secret sharing within the LRSS scheme.
+    :param sources: Matrix of extractor "sources" (w_i in CKOS22). Each row corresponds to a different w_i. 
+    :param seed_shares: Matrix of Shamir shares of the seed. Each row corresponds to a different seed share.
+
+    The reconstruction function assumes that the i-th coordinate of each parameter belongs to the i-th LRSS share. 
+    That is, (eval_points[i], sources[i], seed_shares[i]) is the i-th LRSS share. 
+
+    :returns A single field element as an sint.
+    '''
+    
+    # Do all inputs have same length?
+    num_shares = eval_points.length
+    assert sources.sizes[0] == num_shares
+    assert seed_shares.sizes[0] == num_shares
+
+    # Attempt best-effort seed reconstruction (we will reconstruct something, just no guarantee it's the seed that was used.)
+    seed_shares_T = seed_shares.transpose() # seed_length x num_shares. For convenience in what we do next. 
+    seed_length = seed_shares_T.sizes[0]
+    seed = Array(seed_length, sint)
+    @for_range(seed_length)
+    def _(i):
+        seed[i] = shamir_reconstruct(eval_points, seed_shares_T[i])
+
+    # Run extractor on each source using seed (just dot product of seed with each source)
+    # TODO: would it be simpler to just do shamir_poly_evals = sources.dot(seed) all in one go?
+    shamir_poly_evals = Array(num_shares, sint)
+    @for_range(num_shares)
+    def _(i):
+        shamir_poly_evals[i] = seed.dot(sources[i])[0]
+
+    # Attempt best-effort reconstruction of message.
+    msg = shamir_reconstruct(eval_points, shamir_poly_evals)
+    return msg
+
+### Test CKOS22 LRSS ####
+
+if TEST_LRSS:
+    print_ln("TEST CKOS22 LRSS")
+
+    print_ln("----Test 1----") # basic easy test
+    msg = cint(1)
+    eval_points, sources, seed_shares = lr_share(msg, 3, 3, 1, 0.25)
+    print_ln("eval_points=%s", eval_points.reveal())
+    print_ln("sources=%s", sources.reveal())
+    print_ln("seed_shares=%s", seed_shares.reveal())
+    reconstructed_msg = lr_reconstruct(eval_points, sources, seed_shares)
+    print_ln("reconstructed_msg=%s", reconstructed_msg.reveal())
+
+    print_ln("----Test 2----") # higher leakage budget and much stricter leakage error
+    msg = cint(2025)
+    eval_points, sources, seed_shares = lr_share(msg, 4, 5, 32, 1 / (2**128))
+    print_ln("eval_points=%s", eval_points.reveal())
+    print_ln("sources=%s", sources.reveal())
+    print_ln("seed_shares=%s", seed_shares.reveal())
+    reconstructed_msg = lr_reconstruct(eval_points, sources, seed_shares)
+    print_ln("reconstructed_msg=%s", reconstructed_msg.reveal())
+
+    # TODO: more realistic PSS-style test where we take lrss shares from secret input from each party, reconstruct, then reshare. 
+
+
+# get secret input (secret shares) from players
+# secret = lr_reconstruct(...)
+# new_shares = lr_share(secret, ...)
+# new_shares[i].reveal_to_player(i) in a loop

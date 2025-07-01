@@ -1,0 +1,12 @@
+# example input
+# echo 65 > Player-Data/Input-P0-0
+# echo 72 > Player-Data/Input-P1-0
+# echo 97 > Player-Data/Input-P2-0
+
+a = sint.get_input_from(0)
+b = sint.get_input_from(1)
+c = sint.get_input_from(2)
+
+d = sint.max(a,b)
+e = sint.max(d,c)
+print_ln("The max is: %s", e.reveal())
