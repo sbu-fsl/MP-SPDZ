@@ -215,18 +215,27 @@ class SBox():
 
 class AESCipher():
     '''
+    Implementation of the AES cipher, per FIPS 197.
     '''
-    def __init__(self, num_rounds, key, sbox=None):
+    def __init__(self, num_rounds: int, key: list[sgf2n], sbox=None):
         '''
         Create an instance of AESCipher. This involves setting up basic parameters, an SBox, and 
         performing key expansion. 
 
+        :param num_rounds: int. Number of rounds to perform, must be one of 10, 12, or 14.
+        :param key: list[sgf2n]. An unembedded key of length 16, 24, or 32 bytes (128, 192, or 256 bits).
+        :param sbox: SBox, optional. If not provided, a default SBox will be used. 
+
         TODO: add nparallel as a parameter, and pass it as an arg every time we instantiate a runtime data type (e.g., cgf2n, sgf2n, VectorArray)
+        TODO: num_rounds doesn't really need to be a parameter, we can just use the key length to determine it.
         '''
-        self.num_rounds = num_rounds # Nr \in { 10, 12, 14 }
+        assert(num_rounds in [10, 12, 14]) # per FIPS 197 for AES-128, AES-192, and AES-256, respectively. 
+        self.num_rounds = num_rounds 
         key_length_from_num_rounds = {10: 4, 12: 6, 14: 8}
+        assert(len(key) == key_length_from_num_rounds[num_rounds] * BYTES_PER_WORD) # key must be 16, 24, or 32 bytes long
         self.key_length = key_length_from_num_rounds[num_rounds] # Nk = key length in words (1 word = 4 bytes)
         self.sbox = sbox if sbox else SBox()
+        key = [apply_field_embedding(x) for x in key] # embed the key, so it is in GF(2^40)
         self.key_schedule = self.key_expansion(key) # 4*(Nr+1) words = 16*(Nr+1) bytes
 
     def key_expansion(self, key: list[sgf2n]) -> list[sgf2n]:
@@ -270,14 +279,14 @@ class AESCipher():
                 key_schedule[i * BYTES_PER_WORD + j] = key_schedule[(i - self.key_length) * BYTES_PER_WORD + j] + temp[j]
         return key_schedule
     
-    def cipher(self, plaintext: list[sgf2n]) -> list[sgf2n | cgf2n]:
+    def cipher(self, input: list[sgf2n]) -> list[sgf2n | cgf2n]:
         '''
-        Encrypt the embedded plaintext using the FIPS 197 cipher. 
+        Apply the AES block cipher to a 128-bit input.
 
-        :param plaintext: list[sgf2n]. Assumed to be an embedded plaintext of BLOCK_SIZE words (4 word = 16 bytes = 128 bits)
-        :return: list[sgf2n | cgf2n]. Resulting embedded ciphertext of BLOCK_SIZE words.
+        :param input: Assumed to be a list[sgf2n] of length 16, where each element holds an unembedded byte in its lower 8 bits.
+        :return: Resulting cipher output of length 16, where each element holds an unembedded byte in its lower 8 bits.
         '''
-        state = plaintext # copy plaintext to state vector
+        state = [apply_field_embedding(x) for x in input] # embed input and copy to state vector
         round_key = self.key_schedule[0 : (BLOCK_SIZE * BYTES_PER_WORD)] # each round key is 4 words of key schedule
         self.add_round_key(state, round_key)
         for round in range(1, self.num_rounds):
@@ -290,7 +299,7 @@ class AESCipher():
         self.shift_rows(state)
         round_key = self.key_schedule[self.num_rounds * BLOCK_SIZE * BYTES_PER_WORD : ]
         self.add_round_key(state, round_key)
-        return state
+        return [apply_inverse_field_embedding(x) for x in state]
     
     def cipher_inverse(self, ciphertext):
         '''
@@ -472,7 +481,7 @@ if __name__ == "__main__":
     def test_key_expansion():
         # FIPS 197 Appendix A.1 example
         key_raw = "2b7e151628aed2a6abf7158809cf4f3c"
-        key = [apply_field_embedding(sgf2n(x)) for x in str_to_hex(key_raw)]
+        key = [sgf2n(x) for x in str_to_hex(key_raw)]
         aes = AESCipher(10, key)
         key_schedule = [apply_inverse_field_embedding(x.reveal()) for x in aes.key_schedule]
         expected_key_schedule_raw = "2b7e151628aed2a6abf7158809cf4f3c" + "a0fafe17" + "88542cb1" + "23a33939" + "2a6c7605" + "f2c295f2" + "7a96b943" + "5935807a" + "7359f67f" + "3d80477d" + "4716fe3e" + "1e237e44" + "6d7a883b" + "ef44a541" + "a8525b7f" + "b671253b" + "db0bad00" + "d4d1c6f8" + "7c839d87" + "caf2b8bc" + "11f915bc" + "6d88a37a" + "110b3efd" + "dbf98641" + "ca0093fd" + "4e54f70e" + "5f5fc9f3" + "84a64fb2" + "4ea6dc4f" + "ead27321" + "b58dbad2" + "312bf560" + "7f8d292f" + "ac7766f3" + "19fadc21" + "28d12941" + "575c006e" + "d014f9a8" + "c9ee2589" + "e13f0cc8" + "b6630ca6"
@@ -488,20 +497,20 @@ if __name__ == "__main__":
         key_raw = "2b7e151628aed2a6abf7158809cf4f3c"
         msg_raw = "3243f6a8885a308d313198a2e0370734"
         expected_ct_raw = "3925841d02dc09fbdc118597196a0b32"
-        key = [apply_field_embedding(sgf2n(x)) for x in str_to_hex(key_raw)]
-        msg = [apply_field_embedding(sgf2n(x)) for x in str_to_hex(msg_raw)]
+        key = [sgf2n(x) for x in str_to_hex(key_raw)]
+        msg = [sgf2n(x) for x in str_to_hex(msg_raw)]
         expected_ct = [cgf2n(x) for x in str_to_hex(expected_ct_raw)]
         aes = AESCipher(10, key)
-        ct = [apply_inverse_field_embedding(x.reveal()) for x in aes.cipher(msg)]
+        ct = [x.reveal() for x in aes.cipher(msg)]
         error_pattern = [x + y for x,y in zip(expected_ct, ct)]
         print_ln("EX1: ciphertext = %s\nexpected ciphertext = %s\nerror_pattern = %s", ct, expected_ct, error_pattern)
 
         # Original MP-SPDZ aes.mpc example
         msg_raw = "6bc1bee22e409f96e93d7e117393172a"
         expected_ct_raw = "3ad77bb40d7a3660a89ecaf32466ef97"
-        msg = [apply_field_embedding(sgf2n(x)) for x in str_to_hex(msg_raw)]
+        msg = [sgf2n(x) for x in str_to_hex(msg_raw)]
         expected_ct = [cgf2n(x) for x in str_to_hex(expected_ct_raw)]
-        ct = [apply_inverse_field_embedding(x.reveal()) for x in aes.cipher(msg)]
+        ct = [x.reveal() for x in aes.cipher(msg)]
         error_pattern = [x + y for x,y in zip(expected_ct, ct)]
         print_ln("EX2: ciphertext = %s\nexpected ciphertext = %s\nerror_pattern = %s", ct, expected_ct, error_pattern)
 
