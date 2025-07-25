@@ -4,7 +4,7 @@ import os, sys
 # add MP-SPDZ dir to path so we can import from Compiler
 sys.path.insert(0, os.path.dirname(sys.argv[0]) + '/../..') 
 from Compiler.library import print_ln, for_range, while_do, break_loop, if_, if_e, else_
-from Compiler.types import sint, cint, Matrix, Array
+from Compiler.types import sint, cint, Matrix, Array, sgf2n, cgf2n, regint
 from Compiler.compilerLib import Compiler # only used for testing
 
 class LUSolver:
@@ -130,6 +130,7 @@ class LUSolver:
             def _(j):
                 y[i] = y[i] - ( L[i][j] * y[j] )
             y[i] = y[i].field_div(L[i][i])
+        print("Lower: %s", y)
         return y
 
     def _solve_upper(self, y, free_vars):
@@ -149,8 +150,25 @@ class LUSolver:
         if free_vars is None:
             x = Array(num_cols, y.value_type).assign_all(0)
         elif free_vars == "rand":
-            x = Array(num_cols, y.value_type)
-            x.randomize()
+            if y.value_type == cgf2n:
+                # Bit Compose will work for any field up to size 128
+                x = Array(num_cols, cgf2n)
+                print_ln("Before Bit compose: %s", x.reveal())
+                for i in range(len(x)):
+                    x[i] = (cgf2n.bit_compose([cgf2n(regint.get_random(bit_length=64)) for _ in range(2)]))
+                print_ln("After Bit compose: %s", x.reveal())
+            elif y.value_type == sgf2n:
+                # Bit Compose will work for any field up to size 128
+                x = Array(num_cols, sgf2n)
+                print_ln("Before Bit compose: %s", x.reveal())
+                for i in range(0,len(x)):
+                    x[i] = sgf2n.bit_compose([sgf2n.get_random_bit() for _ in range(128)])
+                print_ln("After Bit compose: %s", x.reveal())
+            else:
+                x = Array(num_cols, y.value_type)
+                print_ln("Array: %s", x.reveal())
+                x.randomize()
+                print_ln("Randomized Array: %s", x.reveal())
         else:
             x = Array(num_cols, y.value_type).assign(free_vars)
 
@@ -322,6 +340,63 @@ if __name__ == "__main__":
             print_ln("preimage of b=%s under M=%s is %s", b.reveal(), M.reveal(), preimage.reveal())
             print_ln("check against b: M * preimage = %s\n", M.dot(preimage).reveal())
         
+
+            print_ln("----Test 6 (Matrix with cgf2n)----")
+            m = [1, 2]
+            M = cgf2n.Matrix(1,2)
+            M[0].assign(m)
+            print_ln("%s", M.reveal())
+
+            print_ln("----Test 7 (Matrix with sgf2n)----")
+            i = sgf2n(400).get_random_bit()
+            l = sgf2n(2).get_random_bit()
+            m = [1, 2]
+            M = sgf2n.Matrix(1,2)
+            M[0].assign(m)
+            print_ln("%s, %s, %s", M.reveal(), i.reveal(), l.reveal())
+
+
+            print_ln("----Test 8 (Randomize with cgf2n)----")
+            m = [[1, 1, 1], [1, 2, 4], [1, 3, 9]]
+            M = cgf2n.Matrix(3,3)
+            M.assign(m)
+            solver = LUSolver(M)
+            print_ln("%s",M)
+            b = Array(3, cgf2n).assign([17, 22, 27])
+            preimage = solver.solve(b, free_vars='rand')
+            print_ln("%s and %s and %s",solver,b,preimage)
+            print_ln("preimage of b=%s under M=%s is %s", b.reveal(), M.reveal(), preimage.reveal())
+            print_ln("check against b: M * preimage = %s\n", M.dot(preimage).reveal())
+
+
+
+            print_ln("----Test 9 (Randomize with sgf2n)----")
+            m = [[31, 17, 771], [123, 839, 401], [165, 332, 912]]
+            M = sgf2n.Matrix(3,3)
+            M.assign(m)
+            solver = LUSolver(M)
+            b = Array(3, sgf2n).assign([17, 22, 27])
+            preimage = solver.solve(b, free_vars='rand')
+            print_ln("preimage of b=%s under M=%s is %s", b.reveal(), M.reveal(), preimage.reveal())
+            print_ln("check against b: M * preimage = %s\n", M.dot(preimage).reveal())
+
+            print_ln("----Test 10----")
+            # given a vector, find its preimage under M, if it exists
+            b = Array(3, sgf2n).assign([4, 5, 6])
+            preimage = solver.solve(b)
+            print_ln("preimage of b=%s under M=%s is %s", b.reveal(), M.reveal(), preimage.reveal())
+            print_ln("check against b: M * preimage = %s\n", M.dot(preimage).reveal())
+            # if M.dot(preimage).reveal() == b.reveal():
+            #     print_ln("Test Passed!")
+            # else:
+            #     print_ln("Test Failed")
+
+            print_ln("----Test 11----")
+            # given a vector, find its preimage under M, if it exists
+            a = sgf2n(400)
+            print_ln("%s", a.reveal())
+
+
         if compiler.options.vandermonde:
             print_ln("VANDERMONDE TESTS")
             print_ln("----Test 1----")
@@ -350,5 +425,26 @@ if __name__ == "__main__":
             # test 3x2 vandermonde
             V = create_vandermonde_matrix(3,1,cint)
             print_ln("V=%s\n", V.reveal())
+
+            print_ln("----Test 6 (Vandermonde with sgf2n)----")
+            # test 3x2 vandermonde
+            V = create_vandermonde_matrix(3,1,sgf2n)
+            print_ln("V=%s\n", V.reveal())
+
+            print_ln("----Test 7 (Vandermonde with cgf2n)----")
+            # test 3x2 vandermonde
+            V = create_vandermonde_matrix(3,1,cgf2n)
+            print_ln("V=%s\n", V.reveal())
+
+            print_ln("----Test 8 (Array Test)----")
+            # solving for random dot product - relevant to CKOS22 LRSS impl
+            m = [27, 49]
+            M = sint.Matrix(1, 2)
+            M[0].assign(m)
+            solver = LUSolver(M)
+            b = Array(1, sint).assign([6])
+            preimage = solver.solve(b, free_vars='rand')
+            print_ln("preimage of b=%s under M=%s is %s", b.reveal(), M.reveal(), preimage.reveal())
+            print_ln("check against b: M * preimage = %s\n", M.dot(preimage).reveal())
 
     compiler.compile_func()
