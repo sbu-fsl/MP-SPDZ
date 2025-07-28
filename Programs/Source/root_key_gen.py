@@ -10,7 +10,7 @@ from Compiler.compilerLib import Compiler
 
 # we assume these modules reside in Programs/Source/ 
 from shamir import shamir_share
-from aes import apply_field_embedding
+from aes import apply_field_embedding, apply_inverse_field_embedding
 
 usage = "usage: %prog [options] [args]"
 compiler = Compiler(usage=usage)
@@ -61,17 +61,19 @@ def root_key_gen():
     
     key_rand = Array(t,sgf2n).assign(rand_list)
 
-    poly_evals = []
+    all_poly_evals = []
     for i in range(key_len//8):
-        poly_evals.append(shamir_share(msg=key[i], threshold=t, num_parties=n, eval_points=key_eval_points, rand=key_rand)[1])
-   
+        poly_evals = shamir_share(msg=key[i], threshold=t, num_parties=n, eval_points=key_eval_points, rand=key_rand)[1]
+        for j in range(len(poly_evals)):
+            poly_evals[j].update(apply_inverse_field_embedding(poly_evals[j]))
+        all_poly_evals.append(poly_evals)
     # write Shamir shares of key back to client. 
     for i in range(n):
         @if_(regint(i) == socket) # think this is equiv to @if_(i == regint(get_player_id()._v)) 
         def _():
             for j in range(key_len//8):
-                poly_eval_personal = poly_evals[j][i].reveal_to(regint(i))
-                cint.write_to_socket(socket, poly_eval_personal._v)
+                poly_eval_personal = all_poly_evals[j][i].reveal_to(i)
+                cint.write_to_socket(socket, cint(poly_eval_personal._v))
 
     # print_ln("KEY=%s\n", key.reveal()) # debugging
 
