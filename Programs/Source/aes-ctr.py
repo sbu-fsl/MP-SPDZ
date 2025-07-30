@@ -22,9 +22,7 @@ def aes_ctr_encrypt(key: list[sgf2n], plaintext: list[sgf2n], nonce: list[cgf2n]
     counters = [[cgf2n(x) for x in i.to_bytes(length=4)] for i in range(num_blocks)]
 
     # AES block cipher setup (performs key expansion)
-    num_rounds_from_key_length = {16: 10, 24: 12, 32: 14}
-    assert(len(key) in num_rounds_from_key_length)  # key must be 16, 24, or 32 bytes long
-    aes = AESCipher(num_rounds_from_key_length[len(key)], key)
+    aes = AESCipher(key)
 
     # encrypt
     plaintext = [plaintext[i * (BLOCK_SIZE*BYTES_PER_WORD) : (i+1) * (BLOCK_SIZE*BYTES_PER_WORD)] for i in range(num_blocks)]
@@ -53,7 +51,7 @@ def aes_ctr_decrypt(key: list[sgf2n], ciphertext: list[sgf2n], nonce: list[cgf2n
     # AES block cipher setup (performs key expansion)
     num_rounds_from_key_length = {16: 10, 24: 12, 32: 14}
     assert(len(key) in num_rounds_from_key_length)  # key must be 16, 24, or 32 bytes long
-    aes = AESCipher(num_rounds_from_key_length[len(key)], key)
+    aes = AESCipher(key)
 
     # decrypt
     ciphertext = [ciphertext[i * (BLOCK_SIZE*BYTES_PER_WORD) : (i+1) * (BLOCK_SIZE*BYTES_PER_WORD)] for i in range(num_blocks)]
@@ -89,9 +87,6 @@ if __name__ == "__main__":
         pt = aes_ctr_decrypt(key, ct, nonce)
         print_ln("msg=%s", [x.reveal() for x in msg])
         print_ln("final plaintext = %s", [x.reveal() for x in pt])
-        print_ln("error pattern = %s", [x.reveal() + y for x,y in zip(msg, pt)])
-
-        
-
+        print_ln("error pattern = %s", [x.reveal() + y.reveal() for x,y in zip(msg, pt)])
 
     compiler.compile_func()

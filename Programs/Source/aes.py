@@ -11,6 +11,7 @@ from Compiler.compilerLib import Compiler
 # CONSTANTS
 BYTES_PER_WORD = 4
 BLOCK_SIZE = 4 # Nb = 4 words = 16 bytes = 128 bits
+
 def apply_field_embedding_bd(in_bytes: list[cgf2n | sgf2n]) -> list[cgf2n | sgf2n]:
     '''
     Applies the field embedding f: GF(2^8) -> GF(2^40) given by x = y^5+1.
@@ -144,7 +145,6 @@ class EmbeddedInverter():
         self.embedded_powers = embedded_powers
         self.size = size
     
-    @vectorize
     def repeated_squaring(self, bd_val: list[cgf2n | sgf2n], exponent: int) -> cgf2n | sgf2n:
         '''
         Compute bd_val^{2^exponent} using lookups into self.embedded_powers
@@ -217,23 +217,21 @@ class AESCipher():
     '''
     Implementation of the AES cipher, per FIPS 197.
     '''
-    def __init__(self, num_rounds: int, key: list[sgf2n], sbox=None):
+    def __init__(self, key: list[sgf2n], sbox=None):
         '''
         Create an instance of AESCipher. This involves setting up basic parameters, an SBox, and 
         performing key expansion. 
 
-        :param num_rounds: int. Number of rounds to perform, must be one of 10, 12, or 14.
         :param key: list[sgf2n]. An unembedded key of length 16, 24, or 32 bytes (128, 192, or 256 bits).
         :param sbox: SBox, optional. If not provided, a default SBox will be used. 
 
         TODO: add nparallel as a parameter, and pass it as an arg every time we instantiate a runtime data type (e.g., cgf2n, sgf2n, VectorArray)
-        TODO: num_rounds doesn't really need to be a parameter, we can just use the key length to determine it.
         '''
-        assert(num_rounds in [10, 12, 14]) # per FIPS 197 for AES-128, AES-192, and AES-256, respectively. 
-        self.num_rounds = num_rounds 
-        key_length_from_num_rounds = {10: 4, 12: 6, 14: 8}
-        assert(len(key) == key_length_from_num_rounds[num_rounds] * BYTES_PER_WORD) # key must be 16, 24, or 32 bytes long
-        self.key_length = key_length_from_num_rounds[num_rounds] # Nk = key length in words (1 word = 4 bytes)
+        assert(len(key) in [16, 24, 32]) # key must be 16, 24, or 32 bytes long
+        num_rounds_from_key_length = {16: 10, 24: 12, 32: 14}
+        self.num_rounds = num_rounds_from_key_length[len(key)] # set num_rounds based on key length
+
+        self.key_length = len(key) // BYTES_PER_WORD # Nk = length of key in words
         self.sbox = sbox if sbox else SBox()
         key = [apply_field_embedding(x) for x in key] # embed the key, so it is in GF(2^40)
         self.key_schedule = self.key_expansion(key) # 4*(Nr+1) words = 16*(Nr+1) bytes
@@ -334,7 +332,6 @@ class AESCipher():
         # return [word[offset % 4], word[(offset + 1) % 4], word[(offset + 2) % 4], word[(offset + 3) % 4]]
         return word[offset:] + word[:offset]
 
-    @vectorize
     def sub_bytes(self, state: list[sgf2n]):
         '''
         Apply S-Box to every element (an embedded sgf2n byte) of state in-place
@@ -355,7 +352,6 @@ class AESCipher():
         for i in range(BLOCK_SIZE): # BLOCK_SIZE = 4 = length of each row, i.e. number of columns.
             state[i::BLOCK_SIZE] = self.rot_word_left(state[i::BLOCK_SIZE],i)
 
-    @vectorize
     def mix_columns(self, state: list[sgf2n]):
         '''
         Multiply state (viewed as a matrix of embedded values) on the left with 
@@ -373,7 +369,6 @@ class AESCipher():
         specific values of the fixed MDS matrix and properties of binary fields. 
         '''
 
-        @vectorize
         def mix_column(column: list[sgf2n]) -> list[sgf2n]:
             '''
             Helper function for computing a single column of mix_columns matrix multiplication.
@@ -385,15 +380,14 @@ class AESCipher():
             column[2] = temp[0] + temp[1] + doubles[2] + (temp[3] + doubles[3])
             column[3] = (temp[0] + doubles[0]) + temp[1] + temp[2] + doubles[3]
         
-        for i in range(4):
+        for i in range(BLOCK_SIZE):
             column = []
-            for j in range(4):
-                column.append(state[i*4+j])
+            for j in range(BYTES_PER_WORD):
+                column.append(state[i*BYTES_PER_WORD+j])
             mix_column(column)
-            for j in range(4):
-                state[i*4+j] = column[j]
+            for j in range(BYTES_PER_WORD):
+                state[i*BYTES_PER_WORD+j] = column[j]
     
-    @vectorize
     def add_round_key(self, state: list[sgf2n], round_key: list[sgf2n]):
         '''
         XOR the state with round_key. Modifies state in-place. 
@@ -466,7 +460,7 @@ if __name__ == "__main__":
     #     # TODO: consider making mix_columns a static / class method. Don't want/need to compile all of AES for this test. 
     #     key_raw = "2b7e151628aed2a6abf7158809cf4f3c"
     #     key = [apply_field_embedding(sgf2n(x)) for x in str_to_hex(key_raw)]
-    #     aes = AESCipher(10, key)
+    #     aes = AESCipher(key)
 
     #     aes.mix_columns(state)
 
@@ -482,7 +476,7 @@ if __name__ == "__main__":
         # FIPS 197 Appendix A.1 example
         key_raw = "2b7e151628aed2a6abf7158809cf4f3c"
         key = [sgf2n(x) for x in str_to_hex(key_raw)]
-        aes = AESCipher(10, key)
+        aes = AESCipher(key)
         key_schedule = [apply_inverse_field_embedding(x.reveal()) for x in aes.key_schedule]
         expected_key_schedule_raw = "2b7e151628aed2a6abf7158809cf4f3c" + "a0fafe17" + "88542cb1" + "23a33939" + "2a6c7605" + "f2c295f2" + "7a96b943" + "5935807a" + "7359f67f" + "3d80477d" + "4716fe3e" + "1e237e44" + "6d7a883b" + "ef44a541" + "a8525b7f" + "b671253b" + "db0bad00" + "d4d1c6f8" + "7c839d87" + "caf2b8bc" + "11f915bc" + "6d88a37a" + "110b3efd" + "dbf98641" + "ca0093fd" + "4e54f70e" + "5f5fc9f3" + "84a64fb2" + "4ea6dc4f" + "ead27321" + "b58dbad2" + "312bf560" + "7f8d292f" + "ac7766f3" + "19fadc21" + "28d12941" + "575c006e" + "d014f9a8" + "c9ee2589" + "e13f0cc8" + "b6630ca6"
         expected_key_schedule = [cgf2n(x) for x in str_to_hex(expected_key_schedule_raw)]
@@ -500,7 +494,7 @@ if __name__ == "__main__":
         key = [sgf2n(x) for x in str_to_hex(key_raw)]
         msg = [sgf2n(x) for x in str_to_hex(msg_raw)]
         expected_ct = [cgf2n(x) for x in str_to_hex(expected_ct_raw)]
-        aes = AESCipher(10, key)
+        aes = AESCipher(key)
         ct = [x.reveal() for x in aes.cipher(msg)]
         error_pattern = [x + y for x,y in zip(expected_ct, ct)]
         print_ln("EX1: ciphertext = %s\nexpected ciphertext = %s\nerror_pattern = %s", ct, expected_ct, error_pattern)
@@ -519,7 +513,7 @@ if __name__ == "__main__":
 
         # key_raw = "2b7e151628aed2a6abf7158809cf4f3c"
         # key = [apply_field_embedding(sgf2n(x)) for x in str_to_hex(key_raw)]
-        # aes = AESCipher(10, key)
+        # aes = AESCipher(key)
         # messages_hex: list[list[int]] = [str_to_hex(x) for x in ["3243f6a8885a308d313198a2e0370734", "6bc1bee22e409f96e93d7e117393172a"]]
         # expected_ciphertexts_raw: list[list[int]] = [str_to_hex(x) for x in ["3925841d02dc09fbdc118597196a0b32", "3ad77bb40d7a3660a89ecaf32466ef97"]]
         # msgs = [apply_field_embedding(sgf2n(list(x))) for x in zip(messages_hex)]
