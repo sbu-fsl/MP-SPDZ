@@ -88,5 +88,9 @@ if __name__ == "__main__":
         print_ln("msg=%s", [x.reveal() for x in msg])
         print_ln("final plaintext = %s", [x.reveal() for x in pt])
         print_ln("error pattern = %s", [x.reveal() + y.reveal() for x,y in zip(msg, pt)])
+        # TODO: can import a python impl of AES encryption and test it against this. Much better method of testing. 
+        # from crypto.cipher import aes... etc. 
+        # py cryptodome? 
+        # during testing, don't harcode message. instead randomly generate messages. 
 
     compiler.compile_func()
