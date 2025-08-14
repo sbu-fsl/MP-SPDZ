@@ -28,7 +28,6 @@ def shamir_share(msg: sint|sgf2n, threshold: int, num_parties: int, eval_points:
     '''
     assert threshold <= num_parties
     msg_type = type(msg)
-    print(f"msg_type={msg_type}")
     if eval_points is None:
         eval_points = Array(num_parties, msg_type).assign([i for i in range(1,num_parties+1)]) # TODO: do we need sint if we return eval_points as part of tuple?
     
@@ -44,9 +43,6 @@ def shamir_share(msg: sint|sgf2n, threshold: int, num_parties: int, eval_points:
             poly_coeffs.randomize()
     poly_coeffs[0] = msg
     poly_evals = V.dot(poly_coeffs)
-    # shares = Matrix(2, num_parties, sint)
-    # shares[0] = eval_points
-    # shares[1] = poly_evals
     return eval_points, poly_evals
 
 def shamir_reconstruct(eval_points, poly_evals):
