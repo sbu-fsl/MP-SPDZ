@@ -7,7 +7,7 @@ import os, sys
 sys.path.insert(0, os.path.dirname(sys.argv[0]) + '/../..')
 
 from Compiler.library import print_ln
-from Compiler.types import sint
+from Compiler.types import sint, Matrix
 from Compiler.compilerLib import Compiler
 
 
