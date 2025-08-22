@@ -73,6 +73,5 @@ def root_key_gen():
             for share in shares_by_party[party]:
                 cint.write_to_socket(socket, cint(share._v))
 
-
 if __name__ == "__main__":
     compiler.compile_func()
