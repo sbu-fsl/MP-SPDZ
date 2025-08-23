@@ -21,7 +21,7 @@
 #include "Tools/Worker.h"
 
 #define SERVER_ID (0)
-#define INPUT_KEYS_MSG_TYPE_SIZE (16) // so memory will by alligned
+#define INPUT_KEYS_MSG_TYPE_SIZE (16) // so memory will by aligned
 
 #ifndef N_EVAL_THREADS
 // Default Intel desktop processor has 8 half cores.

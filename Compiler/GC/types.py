@@ -22,11 +22,13 @@ import itertools
 from functools import reduce
 
 class _binary:
+    def __or__(self, other):
+        return self ^ other ^ (self & other)
     def reveal_to(self, *args, **kwargs):
         raise CompilerError(
-            '%s does not support revealing to indivual players' % type(self))
+            '%s does not support revealing to individual players' % type(self))
 
-class bits(Tape.Register, _structure, _bit):
+class bits(Tape.Register, _structure, _bit, _binary):
     n = 40
     unit = 64
     PreOp = staticmethod(floatingpoint.PreOpN)
@@ -447,7 +449,7 @@ class sbits(bits):
         AND: 1
         NOT: -4
 
-    Instances can be also be initalized from :py:obj:`~Compiler.types.regint`
+    Instances can be also be initialized from :py:obj:`~Compiler.types.regint`
     and :py:obj:`~Compiler.types.sint`.
     """
     max_length = 64
@@ -499,7 +501,7 @@ class sbits(bits):
         res = cls()
         inst.inputb(player, n_bits, 0, res)
         return res
-    # compatiblity to sint
+    # compatibility to sint
     get_raw_input_from = get_input_from
     @classmethod
     def load_dynamic_mem(cls, address):
@@ -631,6 +633,8 @@ class sbits(bits):
     def equal(self, other, n=None):
         bits = (~(self + other)).bit_decompose()
         return reduce(operator.mul, bits)
+    __eq__ = equal
+    __ne__ = lambda self, other: (self == other).bit_not()
     def right_shift(self, m, k, security=None, signed=True):
         return self.TruncPr(k, m)
     def TruncPr(self, k, m, kappa=None):

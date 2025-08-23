@@ -187,7 +187,7 @@ class Compiler:
             "--prime",
             dest="prime",
             default=defaults.prime,
-            help="use bit decomposition with a specifed prime modulus "
+            help="use bit decomposition with a specified prime modulus "
             "for non-linear computation (default: use the masking approach). "
             "Don't use this unless you're certain that you need it.",
         )
@@ -432,7 +432,7 @@ class Compiler:
                 class dummy:
                     def __init__(self, *args):
                         raise CompilerError(self.error)
-                dummy.error = i + " not availabe with binary circuits"
+                dummy.error = i + " not available with binary circuits"
                 if i in ("cint", "cfix"):
                     dummy.error += ". See https://mp-spdz.readthedocs.io/en/" \
                         "latest/Compiler.html#Compiler.types." + i
@@ -565,7 +565,7 @@ class Compiler:
         if not (hasattr(self, "compile_name") and hasattr(self, "compile_func")):
             raise CompilerError(
                 "No function to compile. "
-                "Did you decorate a function with @register_fuction(name)?"
+                "Did you decorate a function with @register_function(name)?"
             )
         self.prep_compile(self.compile_name)
         print(

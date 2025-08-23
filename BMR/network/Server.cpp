@@ -122,7 +122,7 @@ void Server::_listen_to_client(int id){
 //		printf("Server:: received %d: \n", msg_len);
 		_updatable->NewMsg(msg, &_clients_addr[id]);
 	}
-	printf("stop listenning to %d\n", id);
+	printf("stop listening to %d\n", id);
 }
 
 bool Server::_handle_recv_len(int id, size_t actual_len, size_t expected_len) {

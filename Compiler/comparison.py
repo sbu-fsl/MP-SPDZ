@@ -412,7 +412,7 @@ def BitLTC1(u, a, b):
     return p, a_bits, d, s, t, c, b, pre_input
 
 def carry(b, a, compute_p=True):
-    """ Carry propogation:
+    """ Carry propagation:
         return (p,g) = (p_2, g_2)o(p_1, g_1) -> (p_1 & p_2, g_2 | (p_2 & g_1))
     """
     if a is None:

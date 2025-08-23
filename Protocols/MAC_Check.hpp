@@ -86,8 +86,12 @@ Tree_MAC_Check<T>::~Tree_MAC_Check()
 template<class U>
 void Tree_MAC_Check<U>::init_open(const Player&, int n)
 {
-  macs.reserve(macs.size() + n);
-  vals.reserve(vals.size() + n);
+  if (n > WaitingForCheck())
+    {
+      macs.reserve(macs.size() + n);
+      vals.reserve(vals.size() + n);
+    }
+
   this->secrets.clear();
   this->values.clear();
   this->secrets.reserve(n);
