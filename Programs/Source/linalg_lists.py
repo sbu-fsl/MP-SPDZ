@@ -529,12 +529,4 @@ if __name__ == "__main__":
             def _():
                 print_ln("PASSED")
 
-        print_ln("playground")
-        A = Array(2, sint).assign([1,2])
-        ll = []
-        for a in A:
-            ll.append(a)
-        ll = [a.reveal() for a in ll]
-        print_ln("ll=%s", ll)
-
     compiler.compile_func()
