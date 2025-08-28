@@ -17,7 +17,7 @@ def shamir_share(msg: sint|sgf2n, threshold: int, num_parties: int, eval_points:
     :param msg: Secret message to be secret shared, numerical type interpreted according to computation domain (e.g., prime field for arithmetic circuit domain).
     :param threshold: Reconstruction / privacy threshold. Must be less than num_parties.
     :param num_parties: Number of shareholders.
-    :param eval_pts: Optional public Array of explicit evaluation points.
+    :param eval_points: Optional public Array of explicit evaluation points.
     - If given, the length of the list must equal :param num_parties
     - If eval_pts=None, we default to eval_pts=[1,...,num_parties]. Note these integers will be interpreted according to the computation domain.
     :param rand: Optional secret Array of random coefficients to use. Length must equal threshold
@@ -29,7 +29,7 @@ def shamir_share(msg: sint|sgf2n, threshold: int, num_parties: int, eval_points:
     assert threshold <= num_parties
     msg_type = type(msg)
     if eval_points is None:
-        eval_points = Array(num_parties, msg_type).assign([i for i in range(1,num_parties+1)]) # TODO: do we need sint if we return eval_points as part of tuple?
+        eval_points = Array(num_parties, msg_type).assign([i for i in range(1,num_parties+1)])
     
     V = create_vandermonde_matrix(num_parties, threshold - 1, msg_type, eval_points)
     poly_coeffs = Array(threshold, msg_type)
@@ -45,16 +45,26 @@ def shamir_share(msg: sint|sgf2n, threshold: int, num_parties: int, eval_points:
     poly_evals = V.dot(poly_coeffs)
     return eval_points, poly_evals
 
-def shamir_reconstruct(eval_points, poly_evals):
+def shamir_reconstruct(poly_evals: Array | list[sint | sgf2n], eval_points:Array=None) -> sint | sgf2n:
     '''
     Attempts best-effort reconstruction of Shamir secret shares from :param shares
-    
-    :param eval_points: Evaluation points used during the sharing phase. 
+     
     :param poly_evals: Polynomial evaluations corresponding to :param eval_points. 
+    :param eval_points: Optional public Array of explicit evaluation points. Defaults to 1,2,...,len(poly_evals)
     In other words, (eval_points[i], poly_evals[i]) is a single Shamir secret share of the form (x, p(x))
     :returns: A reconstructed secret, interpreted as a field element in the computation domain
     '''
-    V = create_vandermonde_matrix(eval_points.length, eval_points.length - 1, type(poly_evals[0]))
+    # workaround to make this work regardless of whether poly_evals is list or Array
+    msg_type = type(poly_evals[0])
+    n = 0
+    if type(poly_evals) == list:
+        n = len(poly_evals)
+    else:
+        n = poly_evals.length
+    poly_evals = Array(n, msg_type).assign(poly_evals)
+    if eval_points is None:
+        eval_points = Array(n, msg_type).assign([i for i in range(1,n+1)])
+    V = create_vandermonde_matrix(n, n - 1, msg_type)
     solver = LUSolver(V)
     poly_coeffs = solver.solve(poly_evals)
     return poly_coeffs[0]

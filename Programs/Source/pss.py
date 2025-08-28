@@ -14,16 +14,16 @@ from aes import apply_field_embedding, apply_inverse_field_embedding
 
 usage = "usage: %prog [options] [args]"
 compiler = Compiler(usage=usage)
-compiler.parser.add_option("--key-length", dest="key_len")
-compiler.parser.add_option("--threshold", dest="t")
-compiler.parser.add_option("--num-parties", dest="n")
-compiler.parse_args()
-if not compiler.options.key_len:
-    compiler.parser.error("--key-length required")
-if not compiler.options.t:
-    compiler.parser.error("--threshold required")
-if not compiler.options.n:
-    compiler.parser.error("--num-parties required")
+# compiler.parser.add_option("--key-length", dest="key_len")
+# compiler.parser.add_option("--threshold", dest="t")
+# compiler.parser.add_option("--num-parties", dest="n")
+# compiler.parse_args()
+# if not compiler.options.key_len:
+#     compiler.parser.error("--key-length required")
+# if not compiler.options.t:
+#     compiler.parser.error("--threshold required")
+# if not compiler.options.n:
+#     compiler.parser.error("--num-parties required")
 
 @compiler.register_function('pss')
 def pss():
@@ -35,41 +35,35 @@ def pss():
     of shares where each row is a client's input list. Each column is a set of secret shares that 
     gets refreshed. 
     '''
-    # get key_gen_params from command-line args
-    key_len, t, n = int(compiler.options.key_len), int(compiler.options.t), int(compiler.options.n)
+
+    # key_len, t, n = int(compiler.options.key_len), int(compiler.options.t), int(compiler.options.n)
+    key_len, t, n = 128, 2, 3
+    # TODO: in order to use key_len, we want to pass size= key_len // 8 into the size parameter for get_input_from below.
+    # Unfortunately, dependencies like field embeddings and shamir do not support vectorized types like this yet. 
+    # Can we coerce vector into list? Maybe we can do Array.get_vector() first and then put into list? 
 
     # set up external client connections
-    PORT_BASE = 15000
-    listen_for_clients(PORT_BASE)
-    socket = accept_client_connection(PORT_BASE)
+    # PORT_BASE = 15000
+    # listen_for_clients(PORT_BASE)
+    # socket = accept_client_connection(PORT_BASE)
 
-    # get a list of shares from each client, think it has to be through Player-Data/ since 
-    # only method in client interface for sending private data to parties is client.send_private_inputs(values:list) ,
-    # but this assumes client is connected to all parties. 
-    input_shares = [sgf2n.get_input_from(i) for i in range(n)]
+    input_shares = [sgf2n.get_input_from(i, size=1) for i in range(n)] # read from Player-Data/Input-P<player>-<thread>
+    input_shares_embedded = [apply_field_embedding(x) for x in input_shares]
 
+    # reconstruct secret
+    secret_embedded = shamir_reconstruct(input_shares_embedded)
 
-    
-    # secret share each byte, then group shares by party 
-    shares_by_party = {party: [] for party in range(n)}
-    for byte_idx in range(key_len // 8):
-        byte_shares = shamir_share(
-            msg=key_embedded[byte_idx], 
-            threshold=t, 
-            num_parties=n, 
-            eval_points=eval_points_embedded,
-            rand=randomness_embedded
-        )[1] # only want polynomial evaluations, not evaluation points
-        for party, share in enumerate(byte_shares):
-            share = apply_inverse_field_embedding(share)
-            shares_by_party[party].append(share.reveal_to(party)) 
-    
+    # reshare secret
+    new_shares_embedded = shamir_share(secret_embedded, t, n)[1]
+    new_shares = [apply_inverse_field_embedding(x) for x in new_shares_embedded]
+    new_shares_personal = [share.reveal_to(i+1) for i, share in enumerate(new_shares)]
+
     # write shares back to corresponding parties
-    for party in range(n):
-        @if_(party == socket)
-        def _():
-            for share in shares_by_party[party]:
-                cint.write_to_socket(socket, cint(share._v))
-
+    # for party in range(n):
+    #     @if_(party == socket)
+    #     def _():
+    #         new_share = new_shares_personal[party]
+    #         cint.write_to_socket(socket, cint(new_share._v)) 
+    
 if __name__ == "__main__":
     compiler.compile_func()
