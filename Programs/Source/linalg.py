@@ -130,7 +130,6 @@ class LUSolver:
             def _(j):
                 y[i] = y[i] - ( L[i][j] * y[j] )
             y[i] = y[i].field_div(L[i][i])
-        print("Lower: %s", y)
         return y
 
     def _solve_upper(self, y, free_vars):
