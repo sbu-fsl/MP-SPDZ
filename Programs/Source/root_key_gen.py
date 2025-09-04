@@ -48,13 +48,13 @@ def root_key_gen():
     eval_points_embedded = [apply_field_embedding(sgf2n(i)) for i in range(1,n+1)]
     eval_points_embedded = Array(n,sgf2n).assign(eval_points_embedded) # convert to Array since shamir_share expects Array (for now)
 
-    # need to make sure random field elements used in shamir_share are also embedded field elements. 
-    randomness_embedded = [apply_field_embedding(sgf2n.bit_compose([sgf2n.get_random_bit() for _ in range(8)])) for i in range(t)]
-    randomness_embedded = Array(t,sgf2n).assign(randomness_embedded)  # convert to Array since shamir_share expects Array (for now)
-
     # secret share each byte, then group shares by party 
     shares_by_party = {party: [] for party in range(n)}
     for byte_idx in range(key_len // 8):
+        # need to make sure random field elements used in shamir_share are also embedded field elements. 
+        # have to do this inside for loop to ensure we don't reuse randomness across shamir_share() calls
+        randomness_embedded = [apply_field_embedding(sgf2n.bit_compose([sgf2n.get_random_bit() for _ in range(8)])) for i in range(t)]
+        randomness_embedded = Array(t,sgf2n).assign(randomness_embedded)  # convert to Array since shamir_share expects Array (for now)
         byte_shares = shamir_share(
             msg=key_embedded[byte_idx], 
             threshold=t, 
