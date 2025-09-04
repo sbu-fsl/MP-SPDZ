@@ -45,7 +45,7 @@ def root_key_gen():
     key_embedded = [ apply_field_embedding(byte) for byte in key]
 
     # eval points need to be embedded since they participate in arithmetic with embedded key elements. 
-    eval_points_embedded = [apply_field_embedding(sgf2n(i)) for i in range(n)]
+    eval_points_embedded = [apply_field_embedding(sgf2n(i)) for i in range(1,n+1)]
     eval_points_embedded = Array(n,sgf2n).assign(eval_points_embedded) # convert to Array since shamir_share expects Array (for now)
 
     # need to make sure random field elements used in shamir_share are also embedded field elements. 
