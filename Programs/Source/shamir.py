@@ -9,6 +9,7 @@ from Compiler.compilerLib import Compiler # only used for testing
 
 # we assume these modules reside in Programs/Source/ 
 from linalg import LUSolver, create_vandermonde_matrix
+from aes import apply_field_embedding, apply_inverse_field_embedding
 
 def shamir_share(msg: sint|sgf2n, threshold: int, num_parties: int, eval_points:Array=None, rand:Array=None) -> tuple[Array, Array]:
     '''
@@ -103,5 +104,34 @@ if __name__ == "__main__":
         print_ln("eval_points=%s \npoly_evals=%s", eval_points.reveal(), poly_evals.reveal())
         reconstructed_msg = shamir_reconstruct(eval_points, poly_evals)
         print_ln("reconstructed_msg=%s", sgf2n(reconstructed_msg.reveal()).reveal())
+
+        print_ln("----Test 4 (buggy case discovered from pss.py)----")
+        msg = apply_field_embedding(sgf2n(114))
+        print_ln("msg_unembedded=%s, msg_embedded=%s", cgf2n(114), msg.reveal())
+        eval_points_embedded = Array(3, sgf2n).assign([apply_field_embedding(sgf2n(i)) for i in range(1,4)])
+        randomness_embedded = [apply_field_embedding(sgf2n.bit_compose([sgf2n.get_random_bit() for _ in range(8)])) for i in range(2)]
+        randomness_embedded = Array(2,sgf2n).assign(randomness_embedded) 
+        eval_points, poly_evals = shamir_share(msg, 2, 3, eval_points=eval_points_embedded, rand=randomness_embedded)
+        print_ln("eval_points=%s \npoly_evals_embedded=%s, poly_evals_unembedded=%s,", eval_points.reveal(), poly_evals.reveal(), [apply_inverse_field_embedding(x).reveal() for x in poly_evals])
+        reconstructed_msg = shamir_reconstruct(poly_evals, eval_points=eval_points_embedded)
+        print_ln("reconstructed_msg_embedded=%s, reconstructed_msg_unembedded=%s", reconstructed_msg.reveal(), apply_inverse_field_embedding(reconstructed_msg).reveal())
+
+        print_ln("----Test 5 (a simple case)----")
+        msg = apply_field_embedding(sgf2n(1))
+        print_ln("msg_unembedded=%s, msg_embedded=%s", cgf2n(1), msg.reveal())
+        eval_points_embedded = Array(3, sgf2n).assign([apply_field_embedding(sgf2n(i)) for i in range(1,4)])
+        randomness_embedded = [apply_field_embedding(sgf2n.bit_compose([sgf2n.get_random_bit() for _ in range(8)])) for i in range(2)]
+        randomness_embedded = Array(2,sgf2n).assign(randomness_embedded) 
+        eval_points, poly_evals = shamir_share(msg, 2, 3, eval_points=eval_points_embedded, rand=randomness_embedded)
+        print_ln("eval_points=%s \npoly_evals_embedded=%s, poly_evals_unembedded=%s,", [x.reveal() for x in eval_points_embedded], poly_evals.reveal(), [apply_inverse_field_embedding(x).reveal() for x in poly_evals])
+        reconstructed_msg = shamir_reconstruct(poly_evals, eval_points=eval_points_embedded)
+        print_ln("reconstructed_msg_embedded=%s, reconstructed_msg_unembedded=%s", reconstructed_msg.reveal(), apply_inverse_field_embedding(reconstructed_msg).reveal())
+
+        print_ln("----Test 6 (another bug from pss.py)----")
+        eval_points_embedded = Array(3, sgf2n).assign([apply_field_embedding(sgf2n(i)) for i in range(1,4)])
+        poly_evals_embedded = [apply_field_embedding(x) for x in [sgf2n(198), sgf2n(64), sgf2n(203)]]
+        print_ln("poly_evals_embedded=%s", [x.reveal() for x in poly_evals_embedded])
+        reconstructed_msg = shamir_reconstruct(poly_evals_embedded, eval_points=eval_points_embedded)
+        print_ln("reconstructed_msg_embedded=%s, reconstructed_msg_unembedded=%s", reconstructed_msg.reveal(), apply_inverse_field_embedding(reconstructed_msg).reveal())
 
     compiler.compile_func()  
