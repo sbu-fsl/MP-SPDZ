@@ -84,7 +84,7 @@ CONFIG.mine:
 
 online: Fake-Offline.x Server.x Player-Online.x Check-Offline.x emulate.x mascot-party.x
 
-offline: $(OT_EXE) Check-Offline.x mascot-offline.x cowgear-offline.x mal-shamir-offline.x
+offline: $(OT_EXE) Check-Offline.x mascot-offline.x cowgear-offline.x lowgear-offline.x mal-shamir-offline.x
 
 gen_input: gen_input_f2n.x gen_input_fp.x
 
@@ -283,6 +283,7 @@ l2h-example.x: $(VM) $(OT) Machines/Tinier.o
 he-example.x: $(FHEOFFLINE)
 mascot-offline.x: $(VM) $(TINIER)
 cowgear-offline.x: $(TINIER) $(FHEOFFLINE)
+lowgear-offline.x: $(TINIER) $(FHEOFFLINE) Protocols/CowGearOptions.o Protocols/LowGearKeyGen.o
 semi-offline.x: $(GC_SEMI) $(OT)
 semi2k-offline.x: $(GC_SEMI) $(OT)
 hemi-offline.x: $(GC_SEMI) $(FHEOFFLINE) $(OT)
