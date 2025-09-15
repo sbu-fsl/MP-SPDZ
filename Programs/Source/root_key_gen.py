@@ -4,7 +4,7 @@ import os, sys
 # add MP-SPDZ dir to path so we can import from Compiler
 sys.path.insert(0, os.path.dirname(sys.argv[0]) + '/../..') 
 
-from Compiler.library import print_ln, listen_for_clients, accept_client_connection, for_range, get_player_id, if_
+from Compiler.library import print_ln, listen_for_clients, accept_client_connection, for_range, get_player_id, if_, public_input
 from Compiler.types import sint, cint, regint, Array, Matrix, ClientMessageType, sgf2n
 from Compiler.compilerLib import Compiler
 
@@ -12,18 +12,13 @@ from Compiler.compilerLib import Compiler
 from shamir import shamir_share
 from aes import apply_field_embedding, apply_inverse_field_embedding
 
+MAX_KEY_BITS = 128
+MAX_KEY_BYTES = MAX_KEY_BITS // 8
+MAX_N = 3
+MAX_T = 2
+
 usage = "usage: %prog [options] [args]"
 compiler = Compiler(usage=usage)
-compiler.parser.add_option("--key-length", dest="key_len")
-compiler.parser.add_option("--threshold", dest="t")
-compiler.parser.add_option("--num-parties", dest="n")
-compiler.parse_args()
-if not compiler.options.key_len:
-    compiler.parser.error("--key-length required")
-if not compiler.options.t:
-    compiler.parser.error("--threshold required")
-if not compiler.options.n:
-    compiler.parser.error("--num-parties required")
 
 @compiler.register_function('root_key_gen')
 def root_key_gen():
@@ -32,8 +27,13 @@ def root_key_gen():
     that have been passed into the compiler via command-line args. Each secret share
     is sent back to its corresponding party. 
     '''
-    # get key_gen_params from command-line args
-    key_len, t, n = int(compiler.options.key_len), int(compiler.options.t), int(compiler.options.n)
+    # ---- Runtime public parameters ----
+    key_len_bits = public_input()   # public int
+    t = public_input()   # public int
+    n = public_input()   # public int
+    key_len_bytes = key_len_bits // 8
+
+    print("Read from public_input")
 
     # set up external client connections
     PORT_BASE = 15000
@@ -41,24 +41,24 @@ def root_key_gen():
     socket = accept_client_connection(PORT_BASE)
 
     # generate uniformly random key and embed each byte of the key
-    key = [sgf2n.bit_compose([sgf2n.get_random_bit() for _ in range(8)]) for _ in range(key_len // 8)]
+    key = [sgf2n.bit_compose([sgf2n.get_random_bit() for _ in range(8)]) for _ in range(MAX_KEY_BYTES)]
     key_embedded = [ apply_field_embedding(byte) for byte in key]
 
     # eval points need to be embedded since they participate in arithmetic with embedded key elements. 
-    eval_points_embedded = [apply_field_embedding(sgf2n(i)) for i in range(1,n+1)]
-    eval_points_embedded = Array(n,sgf2n).assign(eval_points_embedded) # convert to Array since shamir_share expects Array (for now)
+    eval_points_embedded = [apply_field_embedding(sgf2n(i)) for i in range(1,MAX_N+1)]
+    eval_points_embedded = Array(MAX_N,sgf2n).assign(eval_points_embedded) # convert to Array since shamir_share expects Array (for now)
 
     # secret share each byte, then group shares by party 
-    shares_by_party = {party: [] for party in range(n)}
-    for byte_idx in range(key_len // 8):
+    shares_by_party = {party: [] for party in range(MAX_N)}
+    for byte_idx in range(MAX_KEY_BYTES):
         # need to make sure random field elements used in shamir_share are also embedded field elements. 
         # have to do this inside for loop to ensure we don't reuse randomness across shamir_share() calls
-        randomness_embedded = [apply_field_embedding(sgf2n.bit_compose([sgf2n.get_random_bit() for _ in range(8)])) for i in range(t)]
-        randomness_embedded = Array(t,sgf2n).assign(randomness_embedded)  # convert to Array since shamir_share expects Array (for now)
+        randomness_embedded = [apply_field_embedding(sgf2n.bit_compose([sgf2n.get_random_bit() for _ in range(8)])) for i in range(MAX_T)]
+        randomness_embedded = Array(MAX_T,sgf2n).assign(randomness_embedded)  # convert to Array since shamir_share expects Array (for now)
         byte_shares = shamir_share(
             msg=key_embedded[byte_idx], 
-            threshold=t, 
-            num_parties=n, 
+            threshold=MAX_T, 
+            num_parties=MAX_N, 
             eval_points=eval_points_embedded,
             rand=randomness_embedded
         )[1] # only want polynomial evaluations, not evaluation points
@@ -67,11 +67,13 @@ def root_key_gen():
             shares_by_party[party].append(share.reveal_to(party)) 
     
     # write shares back to corresponding parties
-    for party in range(n):
-        @if_(party == socket)
-        def _():
-            for share in shares_by_party[party]:
-                cint.write_to_socket(socket, cint(share._v))
+    for party in range(MAX_N):
+        @if_((party < n) & (party == socket))
+        def _send_to_socket():
+            for i in range(MAX_KEY_BYTES):
+                @if_(i < key_len_bytes)
+                def _maybe_send():
+                    cint.write_to_socket(socket, cint(shares_by_party[party][i]._v))
 
 if __name__ == "__main__":
     compiler.compile_func()
