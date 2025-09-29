@@ -6,10 +6,11 @@ from Compiler.compilerLib import Compiler
 MAX_BLOCKS = 2 ** 32  # maximum number of plaintext blocks we can handle in AES-CTR mode
 
 
-def aes_ctr_encrypt(key: list[sgf2n], plaintext: list[sgf2n], nonce: list[cgf2n] = None) -> tuple[list[sgf2n], list[sgf2n]]:
+def aes_ctr_encrypt(key: list[sgf2n], plaintext: list[sgf2n], nonce: list[cgf2n] = None) -> tuple[list[cgf2n|sgf2n], list[sgf2n]]:
     '''
     Encrypt plaintext using AES-CTR mode.
 
+    :param key: unembedded key
     :param plaintext: plaintext to encrypt. Length of plaintext should be multiple of BLOCK_SIZE * BYTES_PER_WORD, since we don't yet support padding.
     :return: A tuple with the nonce as the first coordinate, and the ciphertext as the second coordinate. 
     '''
