@@ -806,7 +806,11 @@ class sbitvec(_vec, _bit, _binary):
                         self.v = [t(((other >> i) & 1) * ((1 << t.n) - 1))
                                   for i in range(n)]
                     elif isinstance(other, _vec):
-                        self.v = [type(x)(x) for x in self.bit_extend(other.v, n)]
+                        if isinstance(other, sbitfixvec):
+                            v = other.v.v[other.f:]
+                        else:
+                            v = other.v
+                        self.v = [type(x)(x) for x in self.bit_extend(v, n)]
                     elif isinstance(other, (list, tuple)):
                         self.v = self.bit_extend(sbitvec(other).v, n)
                     else:
@@ -1051,6 +1055,7 @@ class sbitvec(_vec, _bit, _binary):
     def comp_result(cls, x):
         return cls.get_type(1).from_vec([x])
     def expand(self, other, expand=True):
+        assert not isinstance(other, sbitfixvec)
         m = 1
         for x in itertools.chain(self.v, other.v if isinstance(other, sbitvec) else []):
             try:
