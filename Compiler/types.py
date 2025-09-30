@@ -3769,7 +3769,8 @@ class _bitint(Tape._no_truth):
 
     @staticmethod
     def prep_comparison(a, b):
-        a[-1], b[-1] = b[-1], a[-1]
+        if len(a) > 1 and len(b) > 1:
+            a[-1], b[-1] = b[-1], a[-1]
     
     def comparison(self, other, const_rounds=False, index=None):
         a, b = self.expand(other)
