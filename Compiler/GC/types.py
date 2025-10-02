@@ -1632,7 +1632,7 @@ class sbitfixvec(_fix, _vec, _binary):
     def __xor__(self, other):
         if util.is_zero(other):
             return self
-        return self._new(self.v ^ other.v)
+        return self._new(self.v ^ self.coerce(other).v)
     def __and__(self, other):
         return self._new(self.v & other.v)
     __rxor__ = __xor__
