@@ -10,7 +10,7 @@ from Compiler.compilerLib import Compiler
 
 # we assume these modules reside in Programs/Source/ 
 from shamir import shamir_share
-from aes import apply_field_embedding, apply_inverse_field_embedding
+from embeddings import apply_field_embedding, apply_inverse_field_embedding
 
 usage = "usage: %prog [options] [args]"
 compiler = Compiler(usage=usage)

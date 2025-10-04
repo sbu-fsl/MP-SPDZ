@@ -9,7 +9,7 @@ from Compiler.compilerLib import Compiler # only used for testing
 
 # we assume these modules reside in Programs/Source/ 
 from linalg import LUSolver, create_vandermonde_matrix
-from aes import apply_field_embedding, apply_inverse_field_embedding
+from embeddings import apply_field_embedding, apply_inverse_field_embedding
 
 def shamir_share(msg: sint|sgf2n, threshold: int, num_parties: int, eval_points:Array=None, rand:Array=None) -> tuple[Array, Array]:
     '''
