@@ -6,7 +6,7 @@ from Compiler.compilerLib import Compiler
 MAX_BLOCKS = 2 ** 32  # maximum number of plaintext blocks we can handle in AES-CTR mode
 
 
-def aes_ctr_encrypt(key: list[sgf2n], plaintext: list[sgf2n], nonce: list[cgf2n | sgf2n] = None) -> tuple[list[cgf2n|sgf2n], list[sgf2n]]:
+def aes_ctr_encrypt(key: list[sgf2n], plaintext: list[cgf2n | sgf2n], nonce: list[cgf2n | sgf2n] = None) -> tuple[list[cgf2n|sgf2n], list[cgf2n|sgf2n]]:
     '''
     Encrypt plaintext using AES-CTR mode.
 
