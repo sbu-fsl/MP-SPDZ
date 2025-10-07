@@ -790,11 +790,16 @@ class sbitvec(_vec, _bit, _binary):
                     return cls(elements)
             get_raw_input_from = get_input_from
             @classmethod
-            def from_vec(cls, vector):
+            def from_vec(cls, vector, signed=True):
                 res = cls()
                 if isinstance(vector, sbitvec):
                     vector = vector.v
-                res.v = _complement_two_extend(list(vector), n)[:n]
+                v = list(vector)
+                if signed:
+                    v = _complement_two_extend(v, n)
+                else:
+                    v = v + [type(v[0])(0)] * (n - len(v))
+                res.v = v[:n]
                 return res
             def __init__(self, other=None, size=None):
                 instructions_base.check_vector_size(size)
@@ -1398,6 +1403,9 @@ class sbitintvec(sbitvec, _bitint, _number, _sbitintbase):
             a, b = self.expand(other)
         except:
             return NotImplemented
+        if len(a) == 1:
+            res = _bitint.bit_adder(a, b, get_carry=True)
+            return self.get_type(32).from_vec(res, signed=False)
         v = sbitint.bit_adder(a, b)
         return self.get_type(len(v)).from_vec(v)
     __radd__ = __add__
