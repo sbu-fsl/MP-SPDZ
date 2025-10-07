@@ -820,6 +820,7 @@ class sbitvec(_vec, _bit, _binary):
             @classmethod
             def load_mem(cls, address, size=None):
                 if isinstance(address, int) or len(address) == 1:
+                    size = size or instructions_base.get_global_vector_size()
                     address = [address + i * cls.mem_size()
                                for i in range(size or 1)]
                 else:
