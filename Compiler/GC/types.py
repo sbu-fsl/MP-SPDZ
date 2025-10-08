@@ -1491,16 +1491,17 @@ class cbitfix(object):
     malloc = staticmethod(lambda *args: cbits.malloc(*args))
     n_elements = staticmethod(lambda: 1)
     conv = staticmethod(lambda x: x)
-    load_mem = classmethod(lambda cls, *args: cls._new(cbits.load_mem(*args)))
+    load_mem = classmethod(lambda cls, *args: cls._new(
+        cbits.get_type(cls.k).load_mem(*args), adjust=False))
     store_in_mem = lambda self, *args: self.v.store_in_mem(*args)
     mem_size = staticmethod(lambda *args: 1)
     size = 1
     @classmethod
-    def _new(cls, value):
+    def _new(cls, value, adjust=True):
         if isinstance(value, list):
             return [cls._new(x) for x in value]
         res = cls()
-        if cls.k < value.unit:
+        if cls.k < value.unit and adjust:
             bits = value.bit_decompose(cls.k)
             sign = bits[-1]
             value += (sign << (cls.k)) * -1
