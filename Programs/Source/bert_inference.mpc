@@ -22,7 +22,7 @@ from datasets import load_dataset
 
 MODEL_NAME = 'M-FAC/bert-tiny-finetuned-qnli'  # BERT-tiny (2 layers, 128 hidden)
 MAX_LENGTH = 64  # Maximum sequence length
-N_SAMPLES = 1   # Number of samples to evaluate
+N_SAMPLES = 25   # Number of samples to evaluate
 BATCH_SIZE = 1    # Batch size for MPC inference (increase for better performance)
 
 # GLUE task configuration
@@ -343,8 +343,7 @@ _ = optimizer.reveal_correctness(test_embeddings_one, pt_probabilities_sfix_one,
 
 # Compare layers
 print_ln("\nLayer-by-layer comparison (Sample 0 only):")
-print_ln("Layer | Total Absolute Difference | First 8 Values")
-print_ln("-" * 80)
+print_ln("=" * 100)
 
 for idx, (mpc_layer, pt_layer) in enumerate(layers_to_compare):
     layer_id = f"{idx}.{type(pt_layer).__name__}"
@@ -364,12 +363,16 @@ for idx, (mpc_layer, pt_layer) in enumerate(layers_to_compare):
     # Get MPC values
     mpc_output = mpc_layer.Y[0].get_vector().reveal()
 
-    # Compute sum of absolute differences
-    diff = sum(abs(pt_at_runtime - mpc_output))
+    # Compute detailed statistics
+    total_abs_diff = sum(abs(pt_at_runtime - mpc_output))
+    pt_magnitude = sum(abs(pt_at_runtime))
 
-    # Print layer comparison with first 8 values
-    print_ln("%s | Avg. Diff: %s", layer_id, diff / sum(pt_values.shape))
-    print_ln("  PyTorch:  %s", pt_at_runtime[:8])
-    print_ln("  MP-SPDZ:  %s", mpc_output[:8])
+    # Print layer comparison
+    print_ln("\n%s", layer_id)
+    print_ln("  Shape: %s, Elements: %s", pt_values.shape, len(pt_at_runtime))
+    print_ln("  Total Abs Diff: %s", total_abs_diff)
+    print_ln("  PT Total Magnitude: %s", pt_magnitude)
+    print_ln("  First 8 PT:  %s", pt_at_runtime[:8])
+    print_ln("  First 8 MPC: %s", mpc_output[:8])
 
 print_ln("\n=== Inference Complete ===")
