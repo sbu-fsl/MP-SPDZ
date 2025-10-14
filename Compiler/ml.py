@@ -1285,14 +1285,14 @@ class FlexDropout(NoVariableLayer):
             n_bits = -math.log(self.alpha, 2)
             assert n_bits == int(n_bits)
             n_bits = int(n_bits)
-            self.B.assign_all(1)
-            self.alpha = 0.0 # TODO: temp disable for reproducibility
-            # @for_range_opt_multithread(self.n_threads, len(batch))
-            # def _(i):
-            #     size = reduce(operator.mul, self.shape[1:])
-            #     self.B[i].assign_vector(util.tree_reduce(
-            #         util.or_op, (sint.get_random_bit(size=size)
-            #                      for i in range(n_bits))))
+            # self.B.assign_all(1)
+            # self.alpha = 0.0 # TODO: temp disable for reproducibility
+            @for_range_opt_multithread(self.n_threads, len(batch))
+            def _(i):
+                size = reduce(operator.mul, self.shape[1:])
+                self.B[i].assign_vector(util.tree_reduce(
+                    util.or_op, (sint.get_random_bit(size=size)
+                                 for i in range(n_bits))))
             @for_range_opt_multithread(self.n_threads, len(batch))
             def _(i):
                 self.Y[i].assign_vector(1 / (1 - self.alpha) *
@@ -2889,7 +2889,6 @@ class BertPooler(BertBase):
         # batch contains [n_batch, n_heads, n_dim]
         @for_range(len(batch))
         def _(j):
-            print_ln("Pooling %s %s", j, batch[j])
             self.dense.X[j][:] = self.X[batch[j]][0][:]
 
         # if self.debug_output:
@@ -3265,8 +3264,6 @@ class MultiHeadAttention(BertBase):
 
         inc_batch = regint.Array(N)
         inc_batch.assign(regint.inc(N))
-
-        print_ln("post forward")
 
         if self.debug_output:
             # print_ln('forward layer wq full %s', self.wq.X.reveal())
