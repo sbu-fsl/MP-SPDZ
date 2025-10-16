@@ -852,7 +852,7 @@ class RegintOptimizer:
                             new_offset = -delta if reverse else delta
                             mult = 1 if reverse else -1
                         self.add_offset(inst.args[0], new_base, new_offset,
-                                        mult if reverse else -mult)
+                                        mult)
                     if inst.args[1] in self.cache:
                         f(inst.args[2], inst.args[1], False)
                     elif inst.args[2] in self.cache:
