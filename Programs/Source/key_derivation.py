@@ -50,7 +50,7 @@ def derive():
     socket = accept_client_connection(PORT_BASE)
 
     # runtime inputs
-    # nonces should be written to Programs/Public-Input/<progname> in integer format (public_input returns cint)
+    # nonces should be written to Programs/Public-Input/<progname> in decimal integer format (public_input returns cint)
     nonce = [cgf2n(public_input()) for _ in range(12)] if opts.nonce else None
     # TODO: make sure child_key_id is 16-byte (i.e. 128-bit) aligned.
     child_key_id = [cgf2n(public_input()) for _ in range(num_bytes_child_key)] 
