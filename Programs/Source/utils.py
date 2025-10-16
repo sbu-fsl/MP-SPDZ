@@ -36,4 +36,11 @@ def interpolate_zero[T](xs: list[T], ys: list[T], size=1) -> T:
     return res
 
 if __name__ == "__main__":
-    pass
+    usage = "usage: %prog [options] [args]"
+    compiler = Compiler(usage=usage)
+
+    @compiler.register_function("test_utils")
+    def test_utils():
+        pass
+
+    compiler.compile_func()

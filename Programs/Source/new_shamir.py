@@ -8,6 +8,7 @@ from Compiler.types import sint, cint, Array, sgf2n, cgf2n, regint, _number
 from Compiler.compilerLib import Compiler # only used for testing
 
 from utils import get_random_sgf2n, poly_eval, interpolate_zero
+from embeddings import apply_field_embedding, apply_inverse_field_embedding
 
 def shamir_share[T: (S, C), S: (sint, sgf2n), C: (cint, cgf2n)](
     msg: T, 
@@ -17,7 +18,10 @@ def shamir_share[T: (S, C), S: (sint, sgf2n), C: (cint, cgf2n)](
     rand:list[T]=None, 
     size:int=1,
 ) -> tuple[list[C], list[T]]:
-    '''Perform textbook Shamir's secret sharing.'''
+    '''
+    Perform textbook Shamir's secret sharing.
+    TODO: size param might not matter for eval_points, but need to check whether it matters for randomness. 
+    '''
     assert threshold <= num_parties
     t = type(msg)
     ct = t if not hasattr(t, "clear_type") else t.clear_type
@@ -72,6 +76,7 @@ if __name__ == "__main__":
     def test_shamir():
         print_ln("SHAMIR TESTS")
 
+        # Test 1: sgf2n, defaults
         msg = sgf2n(1)
         threshold = 2
         num_parties = 3
@@ -85,7 +90,56 @@ if __name__ == "__main__":
         def _():
             print_ln("✅ TEST 1 PASSED")
 
-       
+        # Test 2: sgf2n, vector
+        msg = sgf2n([1,2,3,4,5])
+        threshold = 2
+        num_parties = 3
+        size = 5
+        _,y = shamir_share(msg, threshold=threshold, num_parties=num_parties, size=size)
+        secret: sgf2n = shamir_reconstruct(y)
+        error_pattern = (secret - msg).reveal()
+        @if_e(error_pattern != cgf2n(0))
+        def _():
+            print_ln("❌ TEST 2 FAILED\nsecret=%s\nexpected secret=%s", secret.reveal(), msg.reveal())
+        @else_
+        def _():
+            print_ln("✅ TEST 2 PASSED")
+
+        # Test 3: sgf2n, embedding
+        msg = sgf2n(64)
+        msg_emb = apply_field_embedding(msg)
+        threshold = 2
+        num_parties = 3
+        eval_points = [apply_field_embedding(cgf2n(i)) for i in range(1,num_parties+1)]
+        rand = [apply_field_embedding(get_random_sgf2n(8)) for _ in range(threshold)]
+        _,y = shamir_share(msg_emb, threshold=threshold, num_parties=num_parties, eval_points=eval_points, rand=rand)
+        secret: sgf2n = apply_inverse_field_embedding(shamir_reconstruct(y))
+        error_pattern = (secret - msg).reveal()
+        @if_e(error_pattern != cgf2n(0))
+        def _():
+            print_ln("❌ TEST 3 FAILED\nsecret=%s\nexpected secret=%s", secret.reveal(), msg.reveal())
+        @else_
+        def _():
+            print_ln("✅ TEST 3 PASSED")
+
+        # Test 4: sgf2n, vector, embedding
+        msg = sgf2n([1,2,3,4,5])
+        msg_emb = apply_field_embedding(msg)
+        size = 5
+        threshold = 2
+        num_parties = 3
+        _,y = shamir_share(msg, threshold=threshold, num_parties=num_parties, size=size)
+        secret: sgf2n = shamir_reconstruct(y)
+        error_pattern = (secret - msg).reveal()
+        @if_e(error_pattern != cgf2n(0))
+        def _():
+            print_ln("❌ TEST 4 FAILED\nsecret=%s\nexpected secret=%s", secret.reveal(), msg.reveal())
+        @else_
+        def _():
+            print_ln("✅ TEST 4 PASSED")
+
+
+    
 
 
     compiler.compile_func()
