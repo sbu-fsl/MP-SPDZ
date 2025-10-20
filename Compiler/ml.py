@@ -290,7 +290,7 @@ class Layer:
         return type(self).__name__ + str(self._Y.shape)
 
     def __repr__(self):
-        return '%s(%s)' % (type(self).__name__, self.Y.shape)
+        return '%s(%s)' % (type(self).__name__, self._Y.shape)
 
 class NoVariableLayer(Layer):
     input_from = lambda *args, **kwargs: None
@@ -467,7 +467,7 @@ class LinearOutput(OutputBase):
 class MultiOutputBase(NoVariableLayer):
     def __init__(self, N, d_out, approx=False, debug=False):
         self.X = sfix.Matrix(N, d_out)
-        self.Y = sfix.Matrix(N, d_out)
+        self.Y = sint.Matrix(N, d_out)
         self.nabla_X = sfix.Matrix(N, d_out)
         self.l = MemValue(sfix(-1))
         self.losses = sfix.Array(N)
