@@ -978,12 +978,13 @@ class Dense(DenseBase):
             @multithread(self.n_threads, N * self.d)
             def _(base, size):
                 X_sub = sfix.Matrix(N * self.d, self.d_out, address=f_schur_Y.address)
-                offset = regint.inc(size, base=base)
 
                 result_matrix.assign_part_vector(
-                    X_sub.direct_mul_trans(self.W, indices=(
-                        offset, regint.inc(self.d_out),
-                        regint.inc(self.d_out), regint.inc(self.d_in))), base)
+                    X_sub.direct_mul_trans(self.W, indices=(regint.inc(size, base=base),
+                                                            regint.inc(self.d_out),
+                                                            regint.inc(self.d_out),
+                                                            regint.inc(self.d_in))),
+                base)
 
             if self.print_random_update:
                 print_ln('backward %s', self)
@@ -994,7 +995,6 @@ class Dense(DenseBase):
             progress('nabla X')
 
         self.backward_params(f_schur_Y, batch=batch)
-
 
 class QuantizedDense(DenseBase):
     def __init__(self, N, d_in, d_out):
@@ -1048,64 +1048,7 @@ class Dropout(NoVariableLayer):
     """ Dropout layer.
 
     :param N: number of examples
-    :param d1: total dimension
-    :param alpha: probability (power of two)
-    """
-    def __init__(self, N, d1, d2=1, alpha=0.5):
-        self.N = N
-        self.d1 = d1
-        self.d2 = d2
-        self.X = Tensor([N, d1, d2], sfix)
-        self.Y = Tensor([N, d1, d2], sfix)
-        self.nabla_Y = Tensor([N, d1, d2], sfix)
-        self.nabla_X = Tensor([N, d1, d2], sfix)
-        self.alpha = alpha
-        self.B = MultiArray([N, d1, d2], sint)
-
-    def __repr__(self):
-        return '%s(%s, %s, alpha=%s)' % \
-            (type(self).__name__, self.N, self.d1, self.alpha)
-
-    def forward(self, batch, training=False):
-        if training:
-            n_bits = -math.log(self.alpha, 2)
-            assert n_bits == int(n_bits)
-            n_bits = int(n_bits)
-            # self.B.assign_all(1) # TODO: temp disable for reproducibility
-            # self.alpha = 0.0 # TODO: temp disable for reproducibility
-            @for_range_opt_multithread(self.n_threads, len(batch))
-            def _(i):
-                size = self.d1 * self.d2
-                self.B[i].assign_vector(util.tree_reduce(
-                    util.or_op, (sint.get_random_bit(size=size)
-                                 for i in range(n_bits))))
-            @for_range_opt_multithread(self.n_threads, len(batch))
-            def _(i):
-                self.Y[i].assign_vector(1 / (1 - self.alpha) *
-                    self.X[batch[i]].get_vector() * self.B[i].get_vector())
-        else:
-            @for_range(len(batch))
-            def _(i):
-                self.Y[i] = self.X[batch[i]]
-        if self.debug_output:
-            print_ln('dropout X %s', self.X.reveal_nested())
-            print_ln('dropout Y %s', self.Y.reveal_nested())
-
-    def backward(self, compute_nabla_X=True, batch=None):
-        if compute_nabla_X:
-            @for_range_opt_multithread(self.n_threads, len(batch))
-            def _(i):
-                self.nabla_X[batch[i]].assign_vector(
-                    self.nabla_Y[i].get_vector() * self.B[i].get_vector())
-        if self.debug_output:
-            print_ln('dropout nabla_Y %s', self.nabla_Y.reveal_nested())
-            print_ln('dropout nabla_X %s', self.nabla_X.reveal_nested())
-
-class FlexDropout(NoVariableLayer):
-    """ Dropout layer.
-
-    :param N: number of examples
-    :param d1: total dimension
+    :param shape: list [N, ...] where N is the number of examples and an arbitrary amount of further dimensions
     :param alpha: probability (power of two)
     """
     def __init__(self, shape, alpha=0.5):
@@ -1126,8 +1069,6 @@ class FlexDropout(NoVariableLayer):
             n_bits = -math.log(self.alpha, 2)
             assert n_bits == int(n_bits)
             n_bits = int(n_bits)
-            # self.B.assign_all(1)
-            # self.alpha = 0.0 # TODO: temp disable for reproducibility
             @for_range_opt_multithread(self.n_threads, len(batch))
             def _(i):
                 size = reduce(operator.mul, self.shape[1:])
@@ -2984,7 +2925,7 @@ class BertOutput(BertBase):
         super(BertOutput, self).__init__(input_shape, output_shape)
         self.dense = Dense(n_examples, intermediate_size, hidden_size, seq_len)
         self.layer_norm = LayerNorm(output_shape, layernorm_eps=layernorm_eps, approx=rsqrt_approx)
-        self.dropout = FlexDropout([n_examples, seq_len, hidden_size], alpha=dropout)
+        self.dropout = Dropout([n_examples, seq_len, hidden_size], alpha=dropout)
 
 
     def forward(self, batch, input_tensor, training=False, input_tensor_batch=None):
@@ -3076,7 +3017,7 @@ class MultiHeadAttention(BertBase):
         self.wq = Dense(n_examples, hidden_size, self.all_head_size, self.seq_len)
         self.wk = Dense(n_examples, hidden_size, self.all_head_size, self.seq_len)
         self.wv = Dense(n_examples, hidden_size, self.all_head_size, self.seq_len)
-        self.dropout = FlexDropout([internal_shape, self.num_attention_heads, self.seq_len, self.seq_len], alpha=dropout) # I think? # TODO: DROPOUT?
+        self.dropout = Dropout([internal_shape, self.num_attention_heads, self.seq_len, self.seq_len], alpha=dropout) # I think? # TODO: DROPOUT?
 
         self.output = BertOutput(internal_shape, hidden_size, hidden_size, seq_len, dropout, layernorm_eps, rsqrt_approx)
         self.context = sfix.Tensor([internal_shape, self.seq_len, hidden_size])
@@ -4306,8 +4247,8 @@ class keras:
                         layers.append(FixAveragePool2d(input_shape, None, **layer[1]))
                         input_shape = layers[-1].Y.sizes
                     elif name == 'dropout':
-                        layers.append(Dropout(batch_size, reduce(
-                            operator.mul, layers[-1].Y.sizes[1:]),
+                        layers.append(Dropout([batch_size] + [reduce(
+                            operator.mul, layers[-1].Y.sizes[1:])],
                                               alpha=layer[1]))
                         input_shape = layers[-1].Y.sizes
                     elif name == 'flatten':
@@ -4544,7 +4485,7 @@ def layers_from_torch(model, data_input_shape, batch_size, input_via=None,
             if alpha == 0.1:
                 print('WARNING: dropout rate 0.1 not supported, using 0.125')
                 alpha = 0.125
-            layers.append(Dropout(input_shape[0], mul(layers[-1].Y.sizes[1:]),
+            layers.append(Dropout([input_shape[0]] + list(layers[-1].Y.sizes[1:]),
                                   alpha=alpha))
             input_shape = layers[-1].Y.sizes
         elif name == 'BertForSequenceClassification':
