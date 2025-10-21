@@ -19,8 +19,10 @@ def shamir_share[T: (S, C), S: (sint, sgf2n), C: (cint, cgf2n)](
     size:int=1,
 ) -> tuple[list[C], list[T]]:
     '''
-    Perform textbook Shamir's secret sharing.
-    TODO: size param might not matter for eval_points, but need to check whether it matters for randomness. 
+    Perform textbook Shamir's secret sharing. 
+    
+    :param eval_points: Should be the corresponding clear type of the msg type
+    :param rand: Optional secret list of length threshold, elements should be same type as msg. 
     '''
     assert threshold <= num_parties
     t = type(msg)
