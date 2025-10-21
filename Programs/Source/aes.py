@@ -12,7 +12,7 @@ from embeddings import *
 
 # CONSTANTS
 BYTES_PER_WORD = 4
-BLOCK_SIZE = 4 # Nb = 4 words = 16 bytes = 128 bits
+WORDS_PER_BLOCK = 4 # Nb = 4 words = 16 bytes = 128 bits
 
 
 class SBox():
@@ -98,7 +98,7 @@ class AESCipher():
             rcon[idx] = cgf2n(rcon_raw[idx])
         
         # number of round keys is (Nr + 1) blocks
-        key_schedule = [sgf2n(0)] * ((BLOCK_SIZE * BYTES_PER_WORD) * (self.num_rounds + 1))
+        key_schedule = [sgf2n(0)] * ((WORDS_PER_BLOCK * BYTES_PER_WORD) * (self.num_rounds + 1))
         temp = [sgf2n(0)] * BYTES_PER_WORD
         
         # first Nk words of key schedule are just the key
@@ -106,7 +106,7 @@ class AESCipher():
             for j in range(BYTES_PER_WORD):
                 key_schedule[i * BYTES_PER_WORD + j] = key[i * BYTES_PER_WORD + j]
         
-        for i in range(self.key_length, BLOCK_SIZE * (self.num_rounds + 1)): 
+        for i in range(self.key_length, WORDS_PER_BLOCK * (self.num_rounds + 1)): 
             # init temp to (i-1)-th word of key schedule
             for j in range(BYTES_PER_WORD): # TODO: can we use slicing to clean this up?
                 temp[j] = key_schedule[(i-1) * BYTES_PER_WORD + j]
@@ -132,17 +132,17 @@ class AESCipher():
         :return: Resulting cipher output of length 16, where each element holds an unembedded byte in its lower 8 bits.
         '''
         state = [apply_field_embedding(x) for x in input] # embed input and copy to state vector
-        round_key = self.key_schedule[0 : (BLOCK_SIZE * BYTES_PER_WORD)] # each round key is 4 words of key schedule
+        round_key = self.key_schedule[0 : (WORDS_PER_BLOCK * BYTES_PER_WORD)] # each round key is 4 words of key schedule
         self.add_round_key(state, round_key)
         for round in range(1, self.num_rounds):
             self.sub_bytes(state)
             self.shift_rows(state)
             self.mix_columns(state)
-            round_key = self.key_schedule[round * BLOCK_SIZE * BYTES_PER_WORD : ((round+1) * BLOCK_SIZE * BYTES_PER_WORD)]
+            round_key = self.key_schedule[round * WORDS_PER_BLOCK * BYTES_PER_WORD : ((round+1) * WORDS_PER_BLOCK * BYTES_PER_WORD)]
             self.add_round_key(state, round_key)
         self.sub_bytes(state)
         self.shift_rows(state)
-        round_key = self.key_schedule[self.num_rounds * BLOCK_SIZE * BYTES_PER_WORD : ]
+        round_key = self.key_schedule[self.num_rounds * WORDS_PER_BLOCK * BYTES_PER_WORD : ]
         self.add_round_key(state, round_key)
         return [apply_inverse_field_embedding(x) for x in state]
     
@@ -196,8 +196,8 @@ class AESCipher():
 
         :param state: list[sgf2n]. We assume elements are embedded, and 4x4 state matrix is stored in column-major order, as specified by FIPS 197. Modified in-place.
         '''
-        for i in range(BLOCK_SIZE): # BLOCK_SIZE = 4 = length of each row, i.e. number of columns.
-            state[i::BLOCK_SIZE] = self.rot_word_left(state[i::BLOCK_SIZE],i)
+        for i in range(WORDS_PER_BLOCK): # WORDS_PER_BLOCK = 4 = length of each row, i.e. number of columns.
+            state[i::WORDS_PER_BLOCK] = self.rot_word_left(state[i::WORDS_PER_BLOCK],i)
 
     def mix_columns(self, state: list[sgf2n]):
         '''
@@ -227,7 +227,7 @@ class AESCipher():
             column[2] = temp[0] + temp[1] + doubles[2] + (temp[3] + doubles[3])
             column[3] = (temp[0] + doubles[0]) + temp[1] + temp[2] + doubles[3]
         
-        for i in range(BLOCK_SIZE):
+        for i in range(WORDS_PER_BLOCK):
             column = []
             for j in range(BYTES_PER_WORD):
                 column.append(state[i*BYTES_PER_WORD+j])

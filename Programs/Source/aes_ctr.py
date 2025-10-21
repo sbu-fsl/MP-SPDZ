@@ -1,4 +1,4 @@
-from aes import AESCipher, BLOCK_SIZE, BYTES_PER_WORD
+from aes import AESCipher, WORDS_PER_BLOCK, BYTES_PER_WORD
 from Compiler.library import print_ln
 from Compiler.types import cgf2n, sgf2n, regint
 from Compiler.compilerLib import Compiler
@@ -11,12 +11,12 @@ def aes_ctr_encrypt(key: list[sgf2n], plaintext: list[cgf2n | sgf2n], nonce: lis
     Encrypt plaintext using AES-CTR mode.
 
     :param key: unembedded key
-    :param plaintext: plaintext to encrypt. Length of plaintext should be multiple of BLOCK_SIZE * BYTES_PER_WORD, since we don't yet support padding.
+    :param plaintext: plaintext to encrypt. Length of plaintext should be multiple of WORDS_PER_BLOCK * BYTES_PER_WORD, since we don't yet support padding.
     :return: A tuple with the nonce as the first coordinate, and the ciphertext as the second coordinate. 
     '''
     # validate plaintext length and set up nonce + counters based on length of plaintext
-    assert(len(plaintext) % (BLOCK_SIZE * BYTES_PER_WORD) == 0) # Too lazy to deal with padding.
-    num_blocks = int(len(plaintext) / (BLOCK_SIZE * BYTES_PER_WORD))
+    assert(len(plaintext) % (WORDS_PER_BLOCK * BYTES_PER_WORD) == 0) # Too lazy to deal with padding.
+    num_blocks = int(len(plaintext) / (WORDS_PER_BLOCK * BYTES_PER_WORD))
     assert(num_blocks <= MAX_BLOCKS)
     if(nonce is None):
         nonce = [cgf2n(regint.get_random(bit_length=8)) for _ in range(12)]
@@ -26,14 +26,14 @@ def aes_ctr_encrypt(key: list[sgf2n], plaintext: list[cgf2n | sgf2n], nonce: lis
     aes = AESCipher(key)
 
     # encrypt
-    plaintext = [plaintext[i * (BLOCK_SIZE*BYTES_PER_WORD) : (i+1) * (BLOCK_SIZE*BYTES_PER_WORD)] for i in range(num_blocks)]
+    plaintext = [plaintext[i * (WORDS_PER_BLOCK*BYTES_PER_WORD) : (i+1) * (WORDS_PER_BLOCK*BYTES_PER_WORD)] for i in range(num_blocks)]
     ciphertext = plaintext
     for i in range(num_blocks):
         cipher_output = aes.cipher(nonce + counters[i])
         # print_ln("[Encrypt] cipher_output in block %s = %s", i, [x.reveal() for x in cipher_output])
         # print_ln("[Encrypt] plaintext in block %s = %s", i, [x.reveal() for x in plaintext[i]])
         # print_ln("[Encrypt] ciphertext before XOR in block %s = %s", i, [x.reveal() for x in ciphertext[i]])
-        for j in range(BLOCK_SIZE * BYTES_PER_WORD):
+        for j in range(WORDS_PER_BLOCK * BYTES_PER_WORD):
             ciphertext[i][j] = plaintext[i][j] + cipher_output[j]
         # print_ln("[Encrypt] ciphertext after XOR in block %s = %s", i, [x.reveal() for x in ciphertext[i]])
     return nonce, [c for block in ciphertext for c in block]
@@ -43,9 +43,9 @@ def aes_ctr_decrypt(key: list[sgf2n], ciphertext: list[sgf2n], nonce: list[cgf2n
     Decrypt ciphertext with nonce and key using AES-CTR mode. 
     '''
     # validate ciphertext length and nonce length and set up counters based on ciphertext length
-    assert(len(ciphertext) % (BLOCK_SIZE * BYTES_PER_WORD) == 0) # Too lazy to deal with padding.
+    assert(len(ciphertext) % (WORDS_PER_BLOCK * BYTES_PER_WORD) == 0) # Too lazy to deal with padding.
     assert(len(nonce) == 12) 
-    num_blocks = int(len(ciphertext) / (BLOCK_SIZE * BYTES_PER_WORD))
+    num_blocks = int(len(ciphertext) / (WORDS_PER_BLOCK * BYTES_PER_WORD))
     assert(num_blocks <= MAX_BLOCKS)
     counters = [[cgf2n(x) for x in i.to_bytes(length=4)] for i in range(num_blocks)]
 
@@ -55,14 +55,14 @@ def aes_ctr_decrypt(key: list[sgf2n], ciphertext: list[sgf2n], nonce: list[cgf2n
     aes = AESCipher(key)
 
     # decrypt
-    ciphertext = [ciphertext[i * (BLOCK_SIZE*BYTES_PER_WORD) : (i+1) * (BLOCK_SIZE*BYTES_PER_WORD)] for i in range(num_blocks)]
+    ciphertext = [ciphertext[i * (WORDS_PER_BLOCK*BYTES_PER_WORD) : (i+1) * (WORDS_PER_BLOCK*BYTES_PER_WORD)] for i in range(num_blocks)]
     plaintext = ciphertext
     for i in range(num_blocks):
         cipher_output = aes.cipher(nonce + counters[i])
         # print_ln("[Decrypt] cipher_output in block %s = %s", i, [x.reveal() for x in cipher_output])
         # print_ln("[Decrypt] ciphertext in block %s = %s", i, [x.reveal() for x in ciphertext[i]])
         # print_ln("[Decrypt] plaintext before XOR in block %s = %s", i, [x.reveal() for x in plaintext[i]])
-        for j in range(BLOCK_SIZE * BYTES_PER_WORD):
+        for j in range(WORDS_PER_BLOCK * BYTES_PER_WORD):
             plaintext[i][j] = ciphertext[i][j] + cipher_output[j]
         # print_ln("[Decrypt] plaintext after XOR in block %s = %s", i, [x.reveal() for x in plaintext[i]])
     return [b for block in plaintext for b in block]
