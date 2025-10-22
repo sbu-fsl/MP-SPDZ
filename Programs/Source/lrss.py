@@ -6,43 +6,11 @@ sys.path.insert(0, os.path.dirname(sys.argv[0]) + '/../..')
 from Compiler.library import print_ln, for_range
 from Compiler.types import sint, cint, Matrix, Array, sgf2n, _secret
 from Compiler.compilerLib import Compiler # only used for testing
-from Compiler.oram import OptimalORAM, AbstractORAM
 
 # we assume these modules reside in Programs/Source/ 
 from linalg import LUSolver
 from shamir import shamir_share, shamir_reconstruct
 from embeddings import apply_field_embedding, apply_inverse_field_embedding
-from utils import get_random_sgf2n
-
-def find_nonzero_secret_idx(arr: AbstractORAM) -> _secret:
-    t: _secret = arr.index_type
-    num_entries = arr.size
-    res = t(0)
-    for i in range(num_entries):
-        b = (arr[t(i)] != t(0))
-        res = b.cond_swap(res, t(i))[0]
-    return res
-
-def dot_product_random_preimage(r: list[sgf2n], y: sgf2n) -> list[sgf2n]:
-    '''
-    Given a vector r and a scalar y, randomly sample a dot product preimage x such that <x,r>=y.
-    NOTE: this implementation uses ORAM.
-    NOTE: only support sgf2n for now.
-    NOTE: this assumes values of r are GF(2^8) values embedded in GF(2^40)
-    NOTE: returned list is embedded
-    '''
-    # init oram instances
-    size = len(r)
-    r_oram = OptimalORAM(size, sgf2n)
-    x_oram = OptimalORAM(size, sgf2n)
-    for i in range(size):
-        r_oram[i] = r[i]
-        x_oram[i] = apply_field_embedding(get_random_sgf2n(8))
-    # solve for x
-    j = find_nonzero_secret_idx(r_oram)
-    x_j, r_j = r_oram[j], x_oram[j]
-    x_oram[j] = (y - (sum(x_oram[i] * r_oram[i] for i in range(size)) - (x_j * r_j))).field_div(r_j)
-    return [x_oram[i] for i in range(size)]
 
 
 def lr_share(msg, threshold, num_parties, leakage_budget, leakage_error, prime_modulus_bit_length):
