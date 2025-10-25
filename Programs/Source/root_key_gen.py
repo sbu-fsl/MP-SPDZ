@@ -4,7 +4,7 @@ import os, sys
 # add MP-SPDZ dir to path so we can import from Compiler
 sys.path.insert(0, os.path.dirname(sys.argv[0]) + '/../..') 
 
-from Compiler.library import print_ln, listen_for_clients, accept_client_connection, for_range, get_player_id, if_
+from Compiler.library import print_ln, listen_for_clients, accept_client_connection, for_range, get_player_id, if_, public_input
 from Compiler.types import sint, cint, regint, Array, Matrix, ClientMessageType, sgf2n
 from Compiler.compilerLib import Compiler
 
