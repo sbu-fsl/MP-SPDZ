@@ -36,7 +36,7 @@ def root_key_gen():
     key_len, t, n = int(compiler.options.key_len), int(compiler.options.t), int(compiler.options.n)
 
     # set up external client connections
-    PORT_BASE = 15000
+    PORT_BASE = public_input()
     listen_for_clients(PORT_BASE)
     socket = accept_client_connection(PORT_BASE)
 
