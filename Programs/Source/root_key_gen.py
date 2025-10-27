@@ -4,7 +4,7 @@ import os, sys
 # add MP-SPDZ dir to path so we can import from Compiler
 sys.path.insert(0, os.path.dirname(sys.argv[0]) + '/../..') 
 
-from Compiler.library import print_ln, listen_for_clients, accept_client_connection, for_range, get_player_id, if_
+from Compiler.library import print_ln, listen_for_clients, accept_client_connection, for_range, get_player_id, if_, public_input
 from Compiler.types import sint, cint, regint, Array, Matrix, ClientMessageType, sgf2n
 from Compiler.compilerLib import Compiler
 
@@ -36,7 +36,7 @@ def root_key_gen():
     key_len, t, n = int(compiler.options.key_len), int(compiler.options.t), int(compiler.options.n)
 
     # set up external client connections
-    PORT_BASE = 15000
+    PORT_BASE = public_input()
     listen_for_clients(PORT_BASE)
     socket = accept_client_connection(PORT_BASE)
 
