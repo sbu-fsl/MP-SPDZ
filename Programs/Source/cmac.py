@@ -70,7 +70,6 @@ def aes_cmac(key: list[sgf2n], m: list[sgf2n | cgf2n], tlen: int) -> list[sgf2n 
     if len(last_block) == BLOCK_SIZE:
         last_block = [k_1[i] + last_block[i] for i in range(BLOCK_SIZE)]
     else: # need to pad!
-        print(f"need to pad. len(last_block)={len(last_block)}")
         padding = [sgf2n(0)] * (BLOCK_SIZE - len(last_block))
         first_padding_byte = padding[0].bit_decompose(8)
         first_padding_byte[-1] = sgf2n(1)
