@@ -17,6 +17,7 @@ def aes_cmac(key: list[sgf2n], m: list[sgf2n | cgf2n], tlen: int) -> list[sgf2n 
     '''
     CMAC(K,M,Tlen) as as described in NIST SP 800-38B (with AES cipher).
     For ease of implementation, we enforce that the message and tag are byte-aligned. 
+    Additionally, we enforce that tlen <= BLOCK_SIZE.
 
     :param key: MAC key represented as unembedded list[sgf2n]
     :param m: the message to be authenticated
@@ -62,12 +63,14 @@ def aes_cmac(key: list[sgf2n], m: list[sgf2n | cgf2n], tlen: int) -> list[sgf2n 
     k_1, k_2 = subkey() 
 
     # set last block of m; pad if necessary
-    n = ceil(len(m) / (BLOCK_SIZE * 8)) if len(m) != 0 else 1 # number of blocks in m
+    n = ceil(len(m) / (BLOCK_SIZE)) if len(m) != 0 else 1 # number of blocks in m
+    print(f"len(m)={len(m)}, n={n}")
     m = copy(m) # avoid mutating argument
     last_block = m[(n-1)*BLOCK_SIZE:]
     if len(last_block) == BLOCK_SIZE:
         last_block = [k_1[i] + last_block[i] for i in range(BLOCK_SIZE)]
     else: # need to pad!
+        print(f"need to pad. len(last_block)={len(last_block)}")
         padding = [sgf2n(0)] * (BLOCK_SIZE - len(last_block))
         first_padding_byte = padding[0].bit_decompose(8)
         first_padding_byte[-1] = sgf2n(1)

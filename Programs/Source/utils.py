@@ -11,6 +11,13 @@ from Compiler.oram import OptimalORAM, AbstractORAM
 # we assume these modules reside in Programs/Source/ 
 from embeddings import apply_field_embedding, apply_inverse_field_embedding
 
+def int_to_sgf2n_bytes(x: int, num_bytes: int) -> list[sgf2n]:
+    '''
+    Convert compile-time int x into a list[sgf2n] of length num_bytes, where each sgf2n holds a byte of x in its lower 8 bits.
+    '''
+    x_bin_lst = [int(bit) for bit in list(bin(x)[2:][::-1])]
+    return [sgf2n.bit_compose(x_bin_lst[j*8:(j+1)*8]) for j in range(num_bytes)]
+
 def pad_byte[T: cgf2n | sgf2n](byte: T, offset: int) -> T:
     '''
     Given a byte = b_0,...,b_7 with offset number of meaningful bits, 
