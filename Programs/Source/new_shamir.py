@@ -55,7 +55,7 @@ def shamir_share[T: (S, C), S: (sint, sgf2n), C: (cint, cgf2n)](
     return eval_points, vals
 
 def shamir_reconstruct[T: (S, C), S: (sint, sgf2n), C: (cint, cgf2n)](
-    vals: T,
+    vals: list[T],
     eval_points: list[C]=None,
     size=1,
 ) -> T:
@@ -130,8 +130,17 @@ if __name__ == "__main__":
         size = 5
         threshold = 2
         num_parties = 3
-        _,y = shamir_share(msg, threshold=threshold, num_parties=num_parties, size=size)
-        secret: sgf2n = shamir_reconstruct(y)
+        eval_points = [apply_field_embedding(cgf2n(i)) for i in range(1,num_parties+1)]
+        rand = [apply_field_embedding(get_random_sgf2n(8, size=size)) for _ in range(threshold)]
+        _,y = shamir_share(
+            msg_emb, 
+            threshold=threshold, 
+            num_parties=num_parties, 
+            eval_points=eval_points, 
+            rand=rand, 
+            size=size
+        )
+        secret: sgf2n = apply_inverse_field_embedding(shamir_reconstruct(y))
         error_pattern = (secret - msg).reveal()
         @if_e(error_pattern != cgf2n(0))
         def _():
