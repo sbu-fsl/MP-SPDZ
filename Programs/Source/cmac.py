@@ -64,7 +64,6 @@ def aes_cmac(key: list[sgf2n], m: list[sgf2n | cgf2n], tlen: int) -> list[sgf2n 
 
     # set last block of m; pad if necessary
     n = ceil(len(m) / (BLOCK_SIZE)) if len(m) != 0 else 1 # number of blocks in m
-    print(f"len(m)={len(m)}, n={n}")
     m = copy(m) # avoid mutating argument
     last_block = m[(n-1)*BLOCK_SIZE:]
     if len(last_block) == BLOCK_SIZE:

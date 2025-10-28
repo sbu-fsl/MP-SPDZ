@@ -18,7 +18,7 @@ def kdf_ctr(kdk: list[sgf2n], h: int, r: int,  L: int, label: list[sgf2n], conte
     '''
     KDF in counter mode as described in NIST SP 800-108r1-upd1. Note the specification calls for h,r,L to 
     represent a number of bits, but since everything we do is byte-aligned, we have h,r,L represent lengths in 
-    bytes. Length of (context, label, L) as a single list[sgf2n] must not exceed 
+    bytes.
 
     :param kdk: key derivation key as unembedded list[sgf2n] 
     :param h: compile-time int representing length of output of a single PRF invocation in bytes.
