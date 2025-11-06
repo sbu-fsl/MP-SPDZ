@@ -74,9 +74,8 @@ def pss():
     for party in range(n):
         @if_(party == socket)
         def _():
-            new_share = new_shares_by_party[party]
-            for byte_share in new_share:
-                cint.write_to_socket(socket, cint(byte_share._v)) 
+            byte_values = [cint(value) for value in new_shares_by_party[party]]
+            cint.write_to_socket(socket, byte_values)
     
 if __name__ == "__main__":
     compiler.compile_func()
