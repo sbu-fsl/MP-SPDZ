@@ -74,7 +74,7 @@ def pss():
     for party in range(n):
         @if_(party == socket)
         def _():
-            byte_values = [cint(value) for value in new_shares_by_party[party]]
+            byte_values = [cint(value._v) for value in new_shares_by_party[party]]
             cint.write_to_socket(socket, byte_values)
     
 if __name__ == "__main__":
