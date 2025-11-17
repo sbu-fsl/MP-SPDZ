@@ -91,7 +91,10 @@ def tkdf():
         @if_(party == socket)
         def _():
             child_key_share = child_key_shares_by_party[party]
-            cint.write_to_socket(socket, cint(child_key_share._v))       
+            byte_values = []
+            for i in range(num_bytes_child_key):
+                byte_values.append(cint(child_key_share[i]._v))
+            cint.write_to_socket(socket, byte_values)       
 
 
 if __name__ == "__main__":
