@@ -1996,7 +1996,12 @@ class personal(Tape._no_truth):
         return self._v
 
     def _div_san(self):
-        return self._v.conv((library.get_player_id() == self.player)._v).if_else(self._v, 1)
+        return self._op_san(1)
+
+    def _op_san(self, default=0):
+        return self._v.conv(
+            (library.get_player_id() == self.player)._v).if_else(
+                self._v, default)
 
     def __setitem__(self, index, value):
         self._san(value)
@@ -2297,9 +2302,11 @@ class _secret(_arithmetic_register, _secret_structure):
         """ Compose value from bits.
 
         :param bits: iterable of any type convertible to sint """
-        from Compiler.GC.types import sbits, sbitintvec
+        from Compiler.GC.types import sbits, sbitintvec, sbitvec
         if isinstance(bits, sbits):
             bits = bits.bit_decompose()
+        elif isinstance(bits, sbitvec):
+            bits = bits.v
         bits = list(bits)
         if (program.use_edabit() or program.use_split()) and isinstance(bits[0], sbits):
             if program.use_edabit():
@@ -3767,7 +3774,8 @@ class _bitint(Tape._no_truth):
 
     @staticmethod
     def prep_comparison(a, b):
-        a[-1], b[-1] = b[-1], a[-1]
+        if len(a) > 1 and len(b) > 1:
+            a[-1], b[-1] = b[-1], a[-1]
     
     def comparison(self, other, const_rounds=False, index=None):
         a, b = self.expand(other)
@@ -4129,9 +4137,9 @@ class cfix(_number, _structure):
         return res
 
     @staticmethod
-    def int_rep(v, f, k=None):
+    def int_rep(v, f, k=None, rep_type=cint):
         if isinstance(v, regint):
-            v = cint(v)
+            v = rep_type(v)
         res = v * (2 ** f)
         try:
             res = int(round(res))
@@ -4383,7 +4391,7 @@ class cfix(_number, _structure):
     @vectorize
     def print_plain(self):
         """ Clear fixed-point output. """
-        nan = abs(self.v) >> (self.k - 1)
+        nan = (self.v < 0).if_else(-self.v - 1, self.v) >> (self.k - 1)
         print_float_plain(cint.conv(self.v), cint(-self.f), \
                           cint(0), cint(0), nan)
 
@@ -4701,7 +4709,7 @@ class _fix(_single):
 
     @classmethod
     def coerce(cls, other, equal_precision=None):
-        if isinstance(other, (_fix, cls.clear_type)):
+        if isinstance(other, (_fix, cls.clear_type, _vectorizable)):
             return other
         else:
             return cls.conv(other)
@@ -4756,7 +4764,8 @@ class _fix(_single):
         elif isinstance(_v, self.int_type):
             self.load_int(_v)
         elif isinstance(_v, cfix.scalars):
-            self.v = self.int_type(cfix.int_rep(_v, f=f, k=k), size=size)
+            self.v = self.int_type(
+                cfix.int_rep(_v, f=f, k=k, rep_type=self.rep_type), size=size)
         elif isinstance(_v, self.float_type):
             p = (f + _v.p)
             b = (p.greater_equal(0, _v.vlen))
@@ -4784,6 +4793,9 @@ class _fix(_single):
 
     def __getitem__(self, index):
         return self._new(self.v[index])
+
+    def __iter__(self):
+        return (self._new(x) for x in self.v)
 
     @vectorize 
     def add(self, other):
@@ -4980,6 +4992,7 @@ class sfix(_fix):
     clear_type = cfix
     get_type = staticmethod(lambda n: sint)
     default_type = sint
+    rep_type = cint
 
     @classmethod
     def get_prec_type(cls, f, k=None):
@@ -5912,6 +5925,18 @@ class _vectorizable:
         """
         self.value_type.reveal_to_clients(clients, [self.get_vector()])
 
+    def reveal_to_socket_by_party(self, client_id, n_parties=None):
+        """ Reveal i-th part to a specific client socket on party i.
+
+        :param client_id: regint
+        :param n_parties: number of parties (default: first dimension length)
+
+        """
+        n_parties = n_parties or len(self)
+        tmp = sum(self.get_part_vector(base=i, size=1).reveal_to(i)._op_san()
+                  for i in range(n_parties))
+        tmp.write_to_socket(client_id, tmp)
+
 class Array(_vectorizable):
     """
     Array accessible by public index. That is, ``a[i]`` works for an
@@ -6632,7 +6657,8 @@ class SubMultiArray(_vectorizable):
         if isinstance(index, int) and index < 0:
             index += self.sizes[0]
         key = program.curr_tape, tuple(
-            (x, x.has_else) for x in program.curr_tape.if_states), str(index)
+            (x, None if isinstance(x, bool) else x.has_else)
+            for x in program.curr_tape.if_states), str(index)
         if key not in self.sub_cache:
             index = self.check(index, self.sizes[0], self.sizes)
             if len(self.sizes) == 2:

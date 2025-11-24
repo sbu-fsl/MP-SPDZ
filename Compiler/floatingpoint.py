@@ -221,7 +221,7 @@ def PreOpN(op, items):
     return output
 
 def PreOR(a=None, raw=False):
-    if comparison.const_rounds:
+    if comparison.const_rounds and a and isinstance(a[0], types._secret):
         return PreORC(a, raw=raw)
     else:
         return PreOpL(or_op, a)

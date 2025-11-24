@@ -248,18 +248,18 @@ semi2k-party.x: $(OT) $(GC_SEMI)
 hemi-party.x: $(FHEOFFLINE) $(GC_SEMI) $(OT)
 temi-party.x: $(FHEOFFLINE) $(GC_SEMI) $(OT)
 soho-party.x: $(FHEOFFLINE) $(GC_SEMI) $(OT)
-cowgear-party.x: $(FHEOFFLINE) Protocols/CowGearOptions.o $(TINIER)
-chaigear-party.x: $(FHEOFFLINE) Protocols/CowGearOptions.o $(TINIER)
-lowgear-party.x: $(FHEOFFLINE) $(TINIER) Protocols/CowGearOptions.o Protocols/LowGearKeyGen.o
-highgear-party.x: $(FHEOFFLINE) $(TINIER) Protocols/CowGearOptions.o Protocols/HighGearKeyGen.o
+cowgear-party.x: $(FHEOFFLINE) $(TINIER)
+chaigear-party.x: $(FHEOFFLINE) $(TINIER)
+lowgear-party.x: $(FHEOFFLINE) $(TINIER) Protocols/LowGearKeyGen.o
+highgear-party.x: $(FHEOFFLINE) $(TINIER) Protocols/HighGearKeyGen.o
 atlas-party.x: GC/AtlasSecret.o
 static/hemi-party.x: $(FHEOBJS)
 static/temi-party.x: $(FHEOBJS)
 static/soho-party.x: $(FHEOBJS)
 static/cowgear-party.x: $(FHEOBJS)
 static/chaigear-party.x: $(FHEOBJS)
-static/lowgear-party.x: $(FHEOBJS) Protocols/CowGearOptions.o Protocols/LowGearKeyGen.o
-static/highgear-party.x: $(FHEOBJS) Protocols/CowGearOptions.o Protocols/HighGearKeyGen.o
+static/lowgear-party.x: $(FHEOBJS) Protocols/LowGearKeyGen.o
+static/highgear-party.x: $(FHEOBJS) Protocols/HighGearKeyGen.o
 mascot-party.x: $(SPDZ)
 static/mascot-party.x: $(SPDZ)
 Player-Online.x: $(SPDZ)

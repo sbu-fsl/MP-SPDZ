@@ -69,7 +69,8 @@ class Circuit:
                 f = function_block
             self.functions[n] = f(lambda *args: self.compile(*args))
             self.functions[n].name = '%s(%d)' % (self.name, inputs[0][0].n)
-        flat_res = self.functions[n](*itertools.chain(*inputs))
+        flat_res = self.functions[n](*itertools.chain(*(
+            sbitvec.from_vec(x).v for x in inputs)))
         res = []
         i = 0
         for l in self.n_output_wires:
