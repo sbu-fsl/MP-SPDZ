@@ -1624,7 +1624,7 @@ class sbitfixvec(_fix, _vec, _binary):
         :param: player (int)
         """
         return cls._new(cls.int_type.get_input_from(player, size=size,
-                                                    f=sbitfix.f))
+                                                    f=cls.f))
     def __init__(self, value=None, *args, **kwargs):
         if isinstance(value, (list, tuple)):
             self.v = self.int_type.from_vec(sbitvec([x.v for x in value]))
