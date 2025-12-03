@@ -1388,6 +1388,17 @@ class cgf2n(_clear, _gf2n):
     reg_type = 'cg'
 
     @classmethod
+    def write_to_socket(self, client_id, values,
+                        message_type=ClientMessageType.NoType):
+        """ Send a list of values to a client by converting to 64-bit regint.
+
+        :param client_id: Client id (regint)
+        :param values: list of cgf2n
+
+        """
+        regint.write_to_socket(client_id, [regint.conv(x) for x in values])
+
+    @classmethod
     def bit_compose(cls, bits, step=None):
         r""" Clear :math:`\mathrm{GF}(2^n)` bit composition.
 
