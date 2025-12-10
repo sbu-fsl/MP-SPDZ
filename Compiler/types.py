@@ -7463,7 +7463,7 @@ class SubMultiArray(_vectorizable):
                     column = column.secure_permute(permutation, reverse=reverse)
                     self.set_column(i, column)
 
-    def sort(self, key_indices=None, n_bits=None, batcher=False):
+    def sort(self, key_indices=None, n_bits=None, batcher=False, n_threads=None):
         """ Sort sub-arrays (different first index) in place.
         This uses `radix sort <https://eprint.iacr.org/2014/121>`_.
 
@@ -7472,7 +7472,8 @@ class SubMultiArray(_vectorizable):
           ``a[*][1][2]``. Default is ``(0, ..., 0)`` of correct length.
         :param n_bits: number of bits in keys (default: global bit length)
         :param batcher: whether to use Batcher's odd-even merge sorting
-
+        :param n_threads: number of threads to use (single thread by default),
+         only works with Batcher's algorithm
         """
         if key_indices is None:
             key_indices = (0,) * (len(self.sizes) - 1)
@@ -7481,7 +7482,7 @@ class SubMultiArray(_vectorizable):
                                 'than the dimension')
         if program.options.binary or batcher:
             assert len(self.sizes) == 2
-            library.loopy_odd_even_merge_sort(self, key_indices=key_indices)
+            library.loopy_odd_even_merge_sort(self, key_indices=key_indices, n_threads=n_threads)
             return
         if isinstance(key_indices, regint):
             key_indices = tuple(key_indices)
