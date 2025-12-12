@@ -4744,7 +4744,7 @@ class _fix(_single):
     @classmethod
     def _new(cls, other, k=None, f=None):
         res = cls(k=k, f=f, initialize=False)
-        res.v = cls.int_type.conv(other)
+        res.v = res.int_type.conv(other)
         return res
 
     @vectorize_init
