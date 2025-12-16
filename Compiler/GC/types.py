@@ -1624,11 +1624,15 @@ class sbitfixvec(_fix, _vec, _binary):
         :param: player (int)
         """
         return cls._new(cls.int_type.get_input_from(player, size=size,
-                                                    f=sbitfix.f))
-    def __init__(self, value=None, *args, **kwargs):
+                                                    f=cls.f))
+    def __init__(self, value=None, k=None, *args, **kwargs):
         if isinstance(value, (list, tuple)):
-            self.v = self.int_type.from_vec(sbitvec([x.v for x in value]))
+            super(sbitfixvec, self).__init__(None, k=k, *args, **kwargs)
+            self.int_type = sbitintvec.get_type(self.k)
+            self.v = self.int_type.from_vec(sbitvec([x.v for x in value]).v)
         else:
+            self.k = k or self.k
+            self.int_type = sbitintvec.get_type(self.k)
             if isinstance(value, sbitvec):
                 value = self.int_type(value)
             super(sbitfixvec, self).__init__(value, *args, **kwargs)
