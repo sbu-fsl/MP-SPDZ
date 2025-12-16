@@ -4,7 +4,7 @@ import os, sys, math
 # add MP-SPDZ dir to path so we can import from Compiler
 sys.path.insert(0, os.path.dirname(sys.argv[0]) + '/../..') 
 from Compiler.library import print_ln, for_range
-from Compiler.types import sint, cint, Matrix, Array, sgf2n, _secret
+from Compiler.types import sint, cint, Matrix, Array, sgf2n, cgf2n, _secret
 from Compiler.compilerLib import Compiler # only used for testing
 
 # we assume these modules reside in Programs/Source/ 
@@ -13,7 +13,7 @@ from shamir import shamir_share, shamir_reconstruct
 from embeddings import apply_field_embedding, apply_inverse_field_embedding
 
 
-def lr_share(msg, threshold, num_parties, leakage_budget, leakage_error, prime_modulus_bit_length):
+def lr_share(msg, threshold, num_parties, leakage_budget, leakage_error, field_bit_length):
     '''
     LRShare algorithm of CKOS22 leakage-resilient secret sharing scheme.
     https://eprint.iacr.org/2022/216
@@ -27,7 +27,7 @@ def lr_share(msg, threshold, num_parties, leakage_budget, leakage_error, prime_m
     :param leakage_budget: Amount of leakage (in bits) from each share the scheme should support (see mu in CKOS22)
     :param leakage_error: For any leakage function f in the local leakage family specified by :param leakage_budget, 
         and for any two messages m, m', :param leakage_error is the maximum possible statistical distance between f(Share(m)) and f(Share(m')) (see epsilon_lr in CKOS22).
-    :param prime_modulus_bit_length: Number of bits needed to represent the size of the prime field being used. 
+    :param field_bit_length: Number of bits needed to represent the size of the prime field being used. 
     
     :returns: Leakage-resilient secret shares as a 3-tuple. The first item in the tuple is an Array of evaluation points. These are the evaluation points
     used in every invocation of Shamir's secret sharing within the LRSS scheme. 
@@ -47,22 +47,21 @@ def lr_share(msg, threshold, num_parties, leakage_budget, leakage_error, prime_m
     # then by rules of matrix multiplication our seed length d = n = source length. 
     # (In other words, our extractor is just a dot product where one of the vectors is a random seed)
     # To determine source length, we have to determine a bunch of other parameters, starting with the extractor error.
-    # NOTE: the following params need to be computed at compile-time (i.e., with normal python types) because sizes of Container types depend on these. 
     ext_error = leakage_error / (6 * num_parties) # see theorem 1 CKOS22
     # By leftover hash lemma, we must have min_entropy >= l + 2log(1/ext_error) - 2 = log|F| + 2log(1/ext_error) - 2
-    min_entropy = prime_modulus_bit_length + 2 * math.log2(1 / ext_error) - 2 
+    min_entropy = field_bit_length + 2 * math.log2(1 / ext_error) - 2 
     # In CKOS22, source length in bits is equal to min_entropy + leakage_budget + 1. Why is this?:
-    # First notice our source must retain at least 'min_entropy' bits of min-entropy in order for our extractor to be secure by leftover hash lemma. 
+    # First notice our source must retain at least min_entropy bits of min-entropy in order for our extractor to be secure by leftover hash lemma. 
     # Second, notice the source is output as part of the final secret share, so it will be subject to leakage, and it must retain the 
     # required min-entropy even AFTER the leakage, so we are at least forced to increase the length by leakage_budget bits.
     # Finally, notice when we actually sample the source below by solving a linear system with one equation in source_length unknowns,
     # there are (source_length - 1) free variables that we set to random field elements. 
     # This is because exactly one variable is determined by the system, so this variable does not contribute any entropy to the source.
-    # As a result, we add 1 to the source length in order to get a source with min-entropy (min_entropy + leakage_budget). 
+    # As a result, we add 1 to source_length in order to get a source with min-entropy (min_entropy + leakage_budget). 
     # This way, no matter how the adversary attains leakage_budget bits of information from the source, its min-entropy can only decrease
     # by at most leakage_budget bits.
     # Also, for us, source_length must correspond to a number of field elements, so divide by log|F| and round up.
-    source_length = math.ceil( (min_entropy + leakage_budget) / prime_modulus_bit_length )
+    source_length = math.ceil( (min_entropy + leakage_budget) / field_bit_length )
     seed_length = source_length
 
     # generate random secret seed
@@ -145,7 +144,7 @@ if __name__ == "__main__":
             num_parties=3, 
             leakage_budget=1, 
             leakage_error=0.25, 
-            prime_modulus_bit_length=PRIME_MODULUS_BIT_LENGTH)
+            field_bit_length=PRIME_MODULUS_BIT_LENGTH)
         print_ln("eval_points=%s", eval_points.reveal())
         print_ln("sources=%s", sources.reveal())
         print_ln("seed_shares=%s", seed_shares.reveal())
@@ -160,7 +159,7 @@ if __name__ == "__main__":
             num_parties=5, 
             leakage_budget=32, 
             leakage_error=1 / (2**128), 
-            prime_modulus_bit_length=PRIME_MODULUS_BIT_LENGTH)
+            field_bit_length=PRIME_MODULUS_BIT_LENGTH)
         print_ln("eval_points=%s", eval_points.reveal())
         print_ln("sources=%s", sources.reveal())
         print_ln("seed_shares=%s", seed_shares.reveal())
