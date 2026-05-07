@@ -74,9 +74,14 @@ def find_nonzero_secret_idx(arr: AbstractORAM) -> _secret:
         res = b.cond_swap(res, t(i))[0] # if b is True, res = t(i)
     return res
 
-def dot_product_random_preimage(r: list[sgf2n], y: sgf2n) -> list[sgf2n]:
+def dot_product_random_preimage(
+        r: list[sgf2n], 
+        y: sgf2n, 
+    ) -> list[sgf2n]:
     '''
-    Given a vector r and a scalar y, randomly sample a dot product preimage x such that <x,r>=y.
+    Given a vector r and a scalar y, randomly sample a dot product preimage x
+    such that <x,r>=y.
+    
     NOTE: this implementation uses ORAM.
     NOTE: only support sgf2n for now.
     NOTE: this assumes values of r and y are GF(2^8) values embedded in GF(2^40)
