@@ -17,7 +17,7 @@ def get_source_length(
     k: int=128, 
 ) -> int:
     '''
-    Helper function for determining (at compile-time) the source length for the
+    Compile-time helper function for determining the source length for the
     inner product extractor used in the SV LRSS scheme. See 3.2 in LRPSS paper
     for derivation.
     '''
@@ -122,7 +122,7 @@ if __name__ == "__main__":
     def test_lrss():
         print_ln("LRSS TESTS")
 
-        print_ln("-----TEST 1-----")
+        print_ln("-----TEST 1: Basic-----")
         msg = sgf2n(2)
         shares = lr_share(
             msg=msg,
@@ -146,6 +146,26 @@ if __name__ == "__main__":
         @else_
         def _():
             print_ln("✅ TEST 1 PASSED")
+
+        print_ln("-----TEST 2: vectorized-----")
+        msg = sgf2n(list(range(100)))
+        size = 100
+        shares = lr_share(
+            msg=msg,
+            threshold=2,
+            num_parties=3,
+            mu=1,
+            secpar=40,
+            size=100
+        )
+        rec_msg = lr_rec(shares)
+        error_pattern = (rec_msg - msg).reveal()
+        @if_e(error_pattern != cgf2n(0))
+        def _():
+            print_ln("❌ TEST 2 FAILED\nreconstructed message=%s\nexpected message=%s", rec_msg.reveal(), msg.reveal())
+        @else_
+        def _():
+            print_ln("✅ TEST 2 PASSED")
     
     compiler.compile_func()
 
