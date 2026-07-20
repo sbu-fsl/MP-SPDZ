@@ -8,7 +8,7 @@ from Compiler.library import listen_for_clients, accept_client_connection, if_, 
 from Compiler.types import cint, sgf2n
 from Compiler.compilerLib import Compiler
 
-from new_shamir import shamir_share
+from shamir import shamir_share
 from embeddings import apply_field_embedding, apply_inverse_field_embedding
 from utils import get_random_sgf2n
 

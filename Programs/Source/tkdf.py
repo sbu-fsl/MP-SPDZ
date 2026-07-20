@@ -9,7 +9,7 @@ from Compiler.types import regint, sgf2n, cgf2n, cint
 from Compiler.compilerLib import Compiler
 
 # we assume these modules reside in Programs/Source/ 
-from new_shamir import shamir_reconstruct, shamir_share
+from Programs.Source.shamir import shamir_reconstruct, shamir_share
 from embeddings import apply_field_embedding, apply_inverse_field_embedding
 from kdf_ctr import kdf_ctr, BLOCK_SIZE
 from utils import get_random_sgf2n

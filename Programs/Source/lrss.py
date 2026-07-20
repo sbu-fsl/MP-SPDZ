@@ -7,7 +7,7 @@ from Compiler.library import print_ln, if_e, else_
 from Compiler.types import sint, cint, Array, sgf2n, cgf2n, regint, _number
 from Compiler.compilerLib import Compiler # only used for testing
 
-from new_shamir import shamir_share, shamir_reconstruct
+from shamir import shamir_share, shamir_reconstruct
 from utils import dot_product_random_preimage, apply_field_embedding, apply_inverse_field_embedding, get_random_sgf2n
 
 def get_source_length(
@@ -70,7 +70,7 @@ def lr_share(
 
     # double mask intermediate shares
     # crucially assumes characteristic-two field where addition is XOR
-    ext_outputs = [[sum(seed[j] * source[j]) for j in range(seed_length)] for source in sources]
+    ext_outputs = [sum(seed[j] * source[j] for j in range(seed_length)) for source in sources]
     ct = [intermediate_shares[i] + ext_outputs[i] + masks[i] for i in range(num_parties)]
     
     # share masks and seed.
@@ -102,13 +102,13 @@ def lr_rec(
     [sources, ct, seed_shares, mask_shares_transposed] = list(map(list, zip(*shares)))
 
     # reconstruct masks and seed
-    mask_shares = list(map(list, zip(mask_shares_transposed)))
+    mask_shares = list(map(list, zip(*mask_shares_transposed)))
     masks = [shamir_reconstruct(s, coords, size=size) for s in mask_shares]
     seed_shares_transposed = list(map(list, zip(*seed_shares)))
     seed = [shamir_reconstruct(s, coords, size=size) for s in seed_shares_transposed]
 
     # unmask intermediate shares
-    ext_outputs = [[sum(seed[j] * source[j]) for j in range(len(seed))] for source in sources]
+    ext_outputs = [sum(seed[j] * source[j] for j in range(len(seed))) for source in sources]
     intermediate_shares = [ct[i] + ext_outputs[i] + masks[i] for i in range(len(ct))]
     msg = shamir_reconstruct(intermediate_shares, coords, size=size)
     return msg
@@ -131,8 +131,21 @@ if __name__ == "__main__":
             mu=1,
             secpar=40,
         )
-        rec_msg = lr_rec(*shares)
+        # for i, share in enumerate(shares):
+        #     [source, ct, seed_shares, mask_shares_transposed] = share
+        #     source = [s.reveal() for s in source]
+        #     ct = ct.reveal()
+        #     seed_shares = [s.reveal() for s in seed_shares]
+        #     mask_shares_transposed = [s.reveal() for s in mask_shares_transposed]
+        #     print_ln("shares[%s] = %s, %s, %s, %s\n", i, source, ct, seed_shares, mask_shares_transposed)
+        rec_msg = lr_rec(shares)
         error_pattern = (rec_msg - msg).reveal()
+        @if_e(error_pattern != cgf2n(0))
+        def _():
+            print_ln("❌ TEST 1 FAILED\nreconstructed message=%s\nexpected message=%s", rec_msg.reveal(), msg.reveal())
+        @else_
+        def _():
+            print_ln("✅ TEST 1 PASSED")
     
     compiler.compile_func()
 
