@@ -109,7 +109,8 @@ def lr_rec(
 
     # unmask intermediate shares
     ext_outputs = [[sum(seed[j] * source[j]) for j in range(len(seed))] for source in sources]
-    
+    intermediate_shares = [ct[i] + ext_outputs[i] + masks[i] for i in range(len(ct))]
+    msg = shamir_reconstruct(intermediate_shares, coords, size=size)
     return msg
     
 
