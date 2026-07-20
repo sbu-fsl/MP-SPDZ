@@ -147,7 +147,7 @@ if __name__ == "__main__":
         def _():
             print_ln("✅ TEST 1 PASSED")
 
-        print_ln("-----TEST 2: vectorized-----")
+        print_ln("-----TEST 2: Vectorized-----")
         msg = sgf2n(list(range(100)))
         size = 100
         shares = lr_share(
@@ -166,6 +166,26 @@ if __name__ == "__main__":
         @else_
         def _():
             print_ln("✅ TEST 2 PASSED")
+
+        print_ln("-----TEST 3: High security + vectorized-----")
+        msg = sgf2n(list(range(100)))
+        size = 100
+        shares = lr_share(
+            msg=msg,
+            threshold=2,
+            num_parties=3,
+            mu=32,
+            secpar=128,
+            size=100
+        )
+        rec_msg = lr_rec(shares)
+        error_pattern = (rec_msg - msg).reveal()
+        @if_e(error_pattern != cgf2n(0))
+        def _():
+            print_ln("❌ TEST 3 FAILED\nreconstructed message=%s\nexpected message=%s", rec_msg.reveal(), msg.reveal())
+        @else_
+        def _():
+            print_ln("✅ TEST 3 PASSED")
     
     compiler.compile_func()
 
