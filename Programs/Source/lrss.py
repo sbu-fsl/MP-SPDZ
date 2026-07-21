@@ -36,7 +36,7 @@ def lr_share(
         secpar: int=40, 
         field_bit_length: int=128,
         size: int=1,
-    ) -> list[list]:
+    ) -> list[tuple]:
     '''
     LRShare algorithm of Srinivasan and Vasudevan strong local leakage-resilient
     secret sharing scheme. https://eprint.iacr.org/2018/1154.
@@ -80,11 +80,11 @@ def lr_share(
     seed_shares = list(map(list, zip(*seed_shares_transposed)))
 
     # output final shares
-    shares = [[sources[i], ct[i], seed_shares[i], mask_shares_transposed[i]] for i in range(num_parties)]
+    shares = [(sources[i], ct[i], seed_shares[i], mask_shares_transposed[i]) for i in range(num_parties)]
     return shares
 
 def lr_rec(
-        shares: list[list],
+        shares: list[tuple],
         coords: list[cgf2n]=None,
         size: int=1
     ):
@@ -92,14 +92,14 @@ def lr_rec(
     LRRec algorithm of Srinivasan and Vasudevan strong local leakage-resilient
     secret sharing scheme. https://eprint.iacr.org/2018/1154. 
 
-    :param shares: each list in shares represents an LRSS share of the form
+    :param shares: each tuple in shares represents an LRSS share of the form
     output by lr_share. 
     :param coords: coords[i] indicates which party shares[i] comes from. If
     None, assumes coords = [cgf2n(i) for i in range(1, len(shares)+1)]
     :param size: the usual parallelization parameter
     '''
     if not coords: coords = [cgf2n(i) for i in range(1, len(shares)+1)]
-    [sources, ct, seed_shares, mask_shares_transposed] = list(map(list, zip(*shares)))
+    [sources, ct, seed_shares, mask_shares_transposed] = list(map(tuple, zip(*shares)))
 
     # reconstruct masks and seed
     mask_shares = list(map(list, zip(*mask_shares_transposed)))
@@ -156,7 +156,7 @@ if __name__ == "__main__":
             num_parties=3,
             mu=1,
             secpar=40,
-            size=100
+            size=size
         )
         rec_msg = lr_rec(shares)
         error_pattern = (rec_msg - msg).reveal()
