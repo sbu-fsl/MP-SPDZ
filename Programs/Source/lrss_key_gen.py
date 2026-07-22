@@ -50,7 +50,7 @@ def lrpss():
             # using "block" to remind each item in share is 128-bits (like AES)
             # TODO: check github issue to see if we can use cgf2n now. 
             share_values = [cint(block._v) for block in shares[party]]
-            cint.write_to_socket(socket, new_share_values)
+            cint.write_to_socket(socket, share_values)
 
 if __name__ == "__main__":
     compiler.compile_func()
