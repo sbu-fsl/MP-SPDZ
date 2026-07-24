@@ -32,10 +32,16 @@ def pad_byte[T: cgf2n | sgf2n](byte: T, offset: int) -> T:
     return t.bit_compose(byte)
 
 def str_to_hex(x):
-        ''' Convert a string into a list of hex values. Obviously the string should represent valid hex to begin with. '''
-        return [int(x[i : i + 2], 16) for i in range(0, len(x), 2)]
+    ''' 
+    Convert a string into a list of hex values. 
+    It is assumed the string represents valid hex. 
+    '''
+    return [int(x[i : i + 2], 16) for i in range(0, len(x), 2)]
 
 def get_random_sgf2n(bit_length: int, size=1) -> sgf2n:
+    '''
+    Sample a sgf2n element where lower **bit_length**-many bits are uniformly random. 
+    '''
     return sgf2n.bit_compose([sgf2n.get_random_bit(size=size) for _ in range(bit_length)])
 
 def poly_eval[S,T: _number](coeffs: list[S], x: T) -> S|T:
@@ -47,13 +53,13 @@ def poly_eval[S,T: _number](coeffs: list[S], x: T) -> S|T:
         return coeffs[0]
     return coeffs[0] + x * poly_eval(coeffs[1:], x)
 
-def interpolate_zero[T](xs: list[T], ys: list[T], size=1) -> T:
+def interpolate_zero[X,Y: _number](xs: list[X], ys: list[Y], size=1) -> Y:
     '''
     Lagrange interpolate the point at x=0 from the points given by zip(xs,ys)
     '''
     assert(len(xs) == len(ys))
     deg = len(xs)
-    t = type(xs[0])
+    t = type(ys[0])
     res = t(0, size=size)
     for i in range(deg):
         prod = t(1, size=size) 
@@ -61,6 +67,30 @@ def interpolate_zero[T](xs: list[T], ys: list[T], size=1) -> T:
             if j != i:
                 prod *= xs[j].field_div((xs[j] - xs[i]))
         res += ys[i] * prod 
+    return res
+
+def obliv_interpolate_zero(
+    xs: list, 
+    valid_xs: list,
+    ys: list, 
+    size: int=1
+) -> sgf2n:
+    '''
+    Lagrange interpolate the point at x=0 from points given by zip(xs,ys),
+    excluding the points where valid_xs[i] == sgf2n(0). Useful as a subroutine
+    in robust secret sharing reconstruction.
+    '''
+    assert(len(xs) == len(valid_xs) and len(xs) == len(ys))
+    n = len(xs)
+    t = type(ys[0])
+    res = t(0, size=size)
+    for i in range(n):
+        prod = t(1, size=size)
+        for j in range(n):
+            if j != i:
+                rational_term = xs[j].field_div((xs[j] - xs[i]))
+                prod *= valid_xs[j].cond_swap(t(1), rational_term)[0]
+        res += ys[i] * prod * valid_xs[i]
     return res
 
 
@@ -77,7 +107,7 @@ def find_nonzero_secret_idx(arr: AbstractORAM) -> _secret:
 def dot_product_random_preimage(
         r: list[sgf2n], 
         y: sgf2n, 
-    ) -> list[sgf2n]:
+) -> list[sgf2n]:
     '''
     Given a vector r and a scalar y, randomly sample a dot product preimage x
     such that <x,r>=y.
@@ -99,6 +129,23 @@ def dot_product_random_preimage(
     x_j, r_j = x_oram[j], r_oram[j]
     x_oram[j] = (y - (sum(x_oram[i] * r_oram[i] for i in range(size)) - (x_j * r_j))).field_div(r_j)
     return [x_oram[i] for i in range(size)]
+
+def mac(key: tuple[sgf2n, sgf2n], msg: list[sgf2n]) -> sgf2n:
+    '''
+    One-time MAC from polynomial hashing.
+
+    :param key: a tuple (a,b) 
+    :param msg: a list of sgf2n
+    '''
+    a,b = key
+    tag = poly_eval(coeffs=[a]+msg, x=b)
+    return tag
+
+def mac_verify(key: tuple[sgf2n, sgf2n], msg:list[sgf2n], tag: sgf2n) -> sgf2n:
+    '''
+    Canonical MAC verification. Outputs sgf2n(1) if tag verifies, else sgf2n(0).
+    '''
+    return tag.equal(mac(key, msg))
 
 if __name__ == "__main__":
     usage = "usage: %prog [options] [args]"

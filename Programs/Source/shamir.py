@@ -7,30 +7,32 @@ from Compiler.library import print_ln, if_e, else_
 from Compiler.types import sint, cint, Array, sgf2n, cgf2n, regint, _number
 from Compiler.compilerLib import Compiler # only used for testing
 
+# we assume these modules reside in Programs/Source/
 from utils import get_random_sgf2n, poly_eval, interpolate_zero
 from embeddings import apply_field_embedding, apply_inverse_field_embedding
 
-def shamir_share[T: (S, C), S: (sint, sgf2n), C: (cint, cgf2n)](
-    msg: T, 
+def shamir_share[K,X](
+    msg: K, 
     threshold: int, 
     num_parties: int, 
-    eval_points:list[C]=None, 
-    rand:list[T]=None, 
+    eval_points:list[X]=None, 
+    rand:list[K]=None, 
     size:int=1,
-) -> tuple[list[C], list[T]]:
+) -> tuple[list[X],list[K]]:
     '''
     Perform textbook Shamir's secret sharing. 
     
-    :param eval_points: Should be the corresponding clear type of the msg type
-    :param rand: Optional secret list of length threshold, elements should be same type as msg. 
+    :param eval_points: Defaults to 1,...,num_parties in clear type corresponding to msg type. 
+    :param rand: Representing secret polynomial coefficients. Generated internally by default.
     '''
     assert threshold <= num_parties
-    t = type(msg)
-    ct = t if not hasattr(t, "clear_type") else t.clear_type
+    kt = type(msg)
+    ct = kt if not hasattr(kt, "clear_type") else kt.clear_type
 
     # setup eval_points
     if eval_points is None:
-        # by default, eval_points are 1,...,num_parties interpreted as clear type of msg type
+        # by default, eval_points are 1,...,num_parties in clear type
+        # corresponding to msg type.
         eval_points = [ct(i, size=size) for i in range(1, num_parties+1)] 
     
     # setup poly_coeffs
@@ -39,36 +41,35 @@ def shamir_share[T: (S, C), S: (sint, sgf2n), C: (cint, cgf2n)](
         assert(len(rand) == threshold)
         poly_coeffs = rand
     else:
-        if t == sgf2n:
-            # TODO: how can we reliably get field bit length at compile time? Seems difficult since we set field at runtime...
+        if kt == sgf2n:
             poly_coeffs = [get_random_sgf2n(128, size=size) for _ in range(threshold)] 
-        elif t == sint:
+        elif kt == sint:
             poly_coeffs = [sint.get_random(size=size) for _ in range(threshold)]
-        elif t == cint:
+        elif kt == cint:
             poly_coeffs = [cint(regint.get_random(128, size=size)) for _ in range(threshold)]
         else:
-            raise TypeError(f"type {t} not yet supported")
+            raise TypeError(f"type {kt} not yet supported")
     poly_coeffs[0] = msg
     
     # compute share values
     vals = [poly_eval(poly_coeffs, eval_points[i]) for i in range(num_parties)]
     return eval_points, vals
 
-def shamir_reconstruct[T: (S, C), S: (sint, sgf2n), C: (cint, cgf2n)](
-    vals: list[T],
-    eval_points: list[C]=None,
+def shamir_reconstruct[K,X](
+    vals: list[K],
+    eval_points: list[X]=None,
     size=1,
-) -> T:
+) -> K:
     '''Shamir secret reconstruction.'''
-    t = type(vals[0])
-    ct = t if not hasattr(t, "clear_type") else t.clear_type
+    kt = type(vals[0])
+    ct = kt if not hasattr(kt, "clear_type") else kt.clear_type
     # setup eval_points
     if eval_points is None:
-        # by default, eval_points are 1,...,num_parties interpreted as clear type of msg type
+        # by default, eval_points are 1,...,num_parties in clear type
+        # corresponding to kt
         eval_points = [ct(i, size=size) for i in range(1, len(vals)+1)] 
     secret = interpolate_zero(eval_points, vals, size=size)
     return secret
-
 
 if __name__ == "__main__":
     usage = "usage: %prog [options] [args]"

@@ -1,14 +1,17 @@
 #!/usr/bin/env python3
 
 import os, sys, math
+from itertools import product, chain
 # add MP-SPDZ dir to path so we can import from Compiler
 sys.path.insert(0, os.path.dirname(sys.argv[0]) + '/../..') 
 from Compiler.library import print_ln, if_e, else_
 from Compiler.types import sint, cint, Array, sgf2n, cgf2n, regint, _number
 from Compiler.compilerLib import Compiler # only used for testing
+from Compiler.oram import OptimalORAM, AbstractORAM
 
+# we assume these modules reside in Programs/Source/
 from shamir import shamir_share, shamir_reconstruct
-from utils import dot_product_random_preimage, apply_field_embedding, apply_inverse_field_embedding, get_random_sgf2n
+from utils import get_random_sgf2n, poly_eval, mac, mac_verify
 
 def get_source_length(
     num_parties: int,
@@ -26,17 +29,14 @@ def get_source_length(
     source_length = math.ceil(lower_bound / k) # eta / k
     return source_length
 
-
-
 def lr_share(
         msg: sgf2n,
         threshold: int,
         num_parties: int,
         mu: int, 
         secpar: int=40, 
-        field_bit_length: int=128,
         size: int=1,
-    ) -> list[tuple]:
+) -> list[tuple]:
     '''
     LRShare algorithm of Srinivasan and Vasudevan strong local leakage-resilient
     secret sharing scheme. https://eprint.iacr.org/2018/1154.
@@ -52,8 +52,7 @@ def lr_share(
     :param num_parties: number of shareholders
     :param mu: number of bits of local leakage allowed on a share
     :param secpar: 2**(- secpar) is desired statistical distance
-    between views on share sets of any two messages (see paper). 
-    :param field_bit_length: bit-length of field msg lives in. Only 128 for now. 
+    between views on leakage responses of any two messages (see paper). 
     :param size: the usual MP-SPDZ parallelization argument 
     '''
     source_length = get_source_length(num_parties, mu, secpar)
@@ -64,9 +63,9 @@ def lr_share(
     intermediate_shares = shamir_share(msg, threshold, num_parties, size=size)[1]
 
     # uniformly sample one extractor seed, num_parties sources, and num_parties masks
-    seed = [get_random_sgf2n(field_bit_length, size=size) for _ in range(seed_length)]
-    sources = [[get_random_sgf2n(field_bit_length, size=size) for _ in range(source_length)] for _ in range(num_parties)]
-    masks = [get_random_sgf2n(field_bit_length, size=size) for _ in range(num_parties)]
+    seed = [get_random_sgf2n(128, size=size) for _ in range(seed_length)]
+    sources = [[get_random_sgf2n(128, size=size) for _ in range(source_length)] for _ in range(num_parties)]
+    masks = [get_random_sgf2n(128, size=size) for _ in range(num_parties)]
 
     # double mask intermediate shares
     # crucially assumes characteristic-two field where addition is XOR
@@ -85,9 +84,9 @@ def lr_share(
 
 def lr_rec(
         shares: list[tuple],
-        coords: list[cgf2n]=None,
+        coords: list=None,
         size: int=1
-    ):
+) -> sgf2n:
     '''
     LRRec algorithm of Srinivasan and Vasudevan strong local leakage-resilient
     secret sharing scheme. https://eprint.iacr.org/2018/1154. 
@@ -112,7 +111,7 @@ def lr_rec(
     intermediate_shares = [ct[i] + ext_outputs[i] + masks[i] for i in range(len(ct))]
     msg = shamir_reconstruct(intermediate_shares, coords, size=size)
     return msg
-    
+
 
 if __name__ == "__main__":
     usage = "usage: %prog [options] [args]"
