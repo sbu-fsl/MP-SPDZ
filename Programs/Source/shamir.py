@@ -8,7 +8,7 @@ from Compiler.types import sint, cint, Array, sgf2n, cgf2n, regint, _number
 from Compiler.compilerLib import Compiler # only used for testing
 
 # we assume these modules reside in Programs/Source/
-from utils import get_random_sgf2n, poly_eval, interpolate_zero
+from utils import get_random_sgf2n, poly_eval, interpolate_zero, obliv_interpolate_zero
 from embeddings import apply_field_embedding, apply_inverse_field_embedding
 
 def shamir_share[K,X](
@@ -58,17 +58,38 @@ def shamir_share[K,X](
 def shamir_reconstruct[K,X](
     vals: list[K],
     eval_points: list[X]=None,
-    size=1,
+    size: int=1,
 ) -> K:
-    '''Shamir secret reconstruction.'''
+    '''
+    Shamir secret reconstruction.
+    '''
     kt = type(vals[0])
     ct = kt if not hasattr(kt, "clear_type") else kt.clear_type
-    # setup eval_points
     if eval_points is None:
         # by default, eval_points are 1,...,num_parties in clear type
         # corresponding to kt
         eval_points = [ct(i, size=size) for i in range(1, len(vals)+1)] 
     secret = interpolate_zero(eval_points, vals, size=size)
+    return secret
+
+def obliv_shamir_reconstruct(
+    vals: list,
+    valid_coords: list,
+    eval_points: list=None,
+    size: int=1
+) -> sgf2n:
+    '''
+    Shamir secret reconstruction, only using those points where valid_coord[i]
+    == sgf2n(1). Useful for robust secret sharing reconstruction, where the
+    caller has identified invalid shares.
+    '''
+    kt = type(vals[0])
+    ct = kt if not hasattr(kt, "clear_type") else kt.clear_type
+    if eval_points is None:
+        # by default, eval_points are 1,...,num_parties in clear type
+        # corresponding to kt
+        eval_points = [ct(i, size=size) for i in range(1, len(vals)+1)]
+    secret = obliv_interpolate_zero(eval_points, valid_coords, vals, size=size)
     return secret
 
 if __name__ == "__main__":

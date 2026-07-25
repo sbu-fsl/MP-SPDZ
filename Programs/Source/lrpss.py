@@ -71,6 +71,8 @@ def lrpss():
     old_shares = [parse_input(i) for i in range(n)]
     secret = lr_rec(old_shares, size=size)
     new_shares = lr_share(secret, t, n, mu, secpar, size=size)
+    # TODO: I think we need to reveal each element of each share to party 
+    # in order to access ._v and write to socket. 
 
     for party in range(n):
         @if_(party == socket)

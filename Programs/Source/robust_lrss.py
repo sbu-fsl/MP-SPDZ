@@ -5,13 +5,12 @@ from itertools import product, chain
 # add MP-SPDZ dir to path so we can import from Compiler
 sys.path.insert(0, os.path.dirname(sys.argv[0]) + '/../..') 
 from Compiler.library import print_ln, if_e, else_
-from Compiler.types import sint, cint, Array, sgf2n, cgf2n, regint, _number
+from Compiler.types import sgf2n, cgf2n, get_sgf2nuint
 from Compiler.compilerLib import Compiler # only used for testing
-from Compiler.oram import OptimalORAM, AbstractORAM
 
 # we assume these modules reside in Programs/Source/
 from lrss import lr_share
-from shamir import shamir_share, shamir_reconstruct
+from shamir import shamir_share, shamir_reconstruct, obliv_shamir_reconstruct
 from utils import get_random_sgf2n, poly_eval, mac, mac_verify
 
 def robust_lr_share(
@@ -28,12 +27,12 @@ def robust_lr_share(
     n = num_parties
     lr_shares = lr_share(msg, threshold, n, mu, secpar, size)
     # off_diagonal = {(j,i) in {0,...,n-1} x {0,...,n-1} : j != i}
-    off_diagonal = filter(lambda pair : pair[0] != pair[1], product(range(n),repeat=2))
+    off_diagonal = list(filter(lambda pair : pair[0] != pair[1], product(range(n),repeat=2)))
     keys = {(j,i): (get_random_sgf2n(128, size=size), get_random_sgf2n(128, size=size)) for j,i in off_diagonal}
     tags = {(j,i): mac(keys[(j,i)], list(chain.from_iterable(lr_shares[i]))) for j,i in off_diagonal}
     robust_shares = [
         (
-         lr_share[i], 
+         lr_shares[i], 
          [keys[(i,j)] for j in range(n) if j != i], 
          [tags[(j,i)] for j in range(n) if j != i]
         ) 
@@ -48,22 +47,20 @@ def robust_lr_rec(
     '''
     Robust variant of lr_share obtained with pairwise MAC trick of Rabin and
     Ben-Or. **shares** must have length equal to the number of parties. 
-
-    **WARNING**: uses ORAM
     '''
     n = len(shares) 
-    candidate_secrets = OptimalORAM(n, sgf2n)
     lr_shares = [s[0] for s in shares]
     # off_diagonal = {(j,i) in {0,...,n-1} x {0,...,n-1} : j != i}
-    off_diagonal = filter(lambda pair : pair[0] != pair[1], product(range(n),repeat=2))
+    off_diagonal = list(filter(lambda pair : pair[0] != pair[1], product(range(n),repeat=2)))
     keys = {(i,j): shares[i][1][j] for i,j in off_diagonal}
     tags = {(i,j): shares[j][2][i] for i,j in off_diagonal}
+    candidates = [None for _ in range(n)]
     for i in range(n):
         is_valid_share = {
             j: mac_verify(keys[(i,j)], lr_shares[j], tags[(i,j)]) 
             for j in range(n) if j != i
         } 
-        is_valid_share[i] = sgf2n(1) # party i trusts his own share
+        is_valid_share[i] = sgf2n(1, size=size) # party i trusts his own share
         '''
         We only want to reconstruct using lr_shares[i] if the i-th share is
         valid. Ideally, we would just filter lr_shares into a list containing
@@ -77,9 +74,35 @@ def robust_lr_rec(
 
         Our solution is to introduce a bitmap valid_coords such that
         valid_coords[i] == sgf2n(1) if the i-th share is valid, else sgf2n(0).
+        We define an "oblivious" version of Shamir reconstruction taking this
+        bitmap as input, and proceed as in lr_rec, using oblivious
+        reconstruction instead of the normal Shamir reconstruction.
         '''
         valid_coords = list(is_valid_share.values()) 
-
+        # begin adapted lr_rec code (too lazy to generalize lr_rec)
+        [sources, ct, seed_shares, mask_shares_transposed] = list(map(tuple, zip(*lr_shares)))
+        mask_shares = list(map(list, zip(*mask_shares_transposed)))
+        masks = [obliv_shamir_reconstruct(s, valid_coords, size=size) for s in mask_shares]
+        seed_shares_transposed = list(map(list, zip(*seed_shares)))
+        seed = [obliv_shamir_reconstruct(s, valid_coords, size=size) for s in seed_shares_transposed]
+        ext_outputs = [sum(seed[j] * source[j] for j in range(len(seed))) for source in sources]
+        intermediate_shares = [ct[i] + ext_outputs[i] + masks[i] for i in range(len(ct))]
+        candidates[i] = obliv_shamir_reconstruct(intermediate_shares, valid_coords, size=size)
+        # end adapted lr_rec code
+    '''a little hack to get most frequent item in candidates'''
+    sgf2nuint_logn = get_sgf2nuint(math.ceil(math.log2(n)+1))
+    frqs = [
+        sum(sgf2nuint_logn(candidates[i].equal(candidates[j]), size=size) for j in range(n)) 
+        for i in range(n)
+    ] # frqs: list[sgf2nuint_logn]
+    indicators: list[sgf2n] = [frq >= math.ceil(n/2) for frq in frqs] # honest majority assumption
+    proj = [c * i for c,i in zip(candidates,indicators)] # proj contains only "correct" secrets (all equal) and zeros
+    res = sgf2n(1, size=size)
+    for i in range(n):
+        a = proj[i]
+        b = a.not_equal(0) * a.not_equal(res) #b=1 implies a is desired res
+        res = res * b.cond_swap(1, a)[0]
+    return res
 
 
 
@@ -90,6 +113,24 @@ if __name__ == "__main__":
     @compiler.register_function("test_robust_lrss")
     def test_robust_lrss():
         print_ln("ROBUST LRSS TESTS")
+
+        print_ln("-----TEST 1: BASIC-----")
+        msg = sgf2n(2)
+        shares = robust_lr_share(
+            msg=msg,
+            threshold=2,
+            num_parties=3,
+            mu=1,
+            secpar=40,
+        )
+        rec_msg = robust_lr_rec(shares)
+        error_pattern = (rec_msg - msg).reveal()
+        @if_e(error_pattern != cgf2n(0))
+        def _():
+            print_ln("❌ TEST 1 FAILED\nreconstructed message=%s\nexpected message=%s", rec_msg.reveal(), msg.reveal())
+        @else_
+        def _():
+            print_ln("✅ TEST 1 PASSED")
     
     compiler.compile_func()
 
