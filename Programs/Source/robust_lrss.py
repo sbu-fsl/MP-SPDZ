@@ -96,12 +96,9 @@ def robust_lr_rec(
         for i in range(n)
     ] # frqs: list[sgf2nuint_logn]
     indicators: list[sgf2n] = [frq >= math.ceil(n/2) for frq in frqs] # honest majority assumption
-    proj = [c * i for c,i in zip(candidates,indicators)] # proj contains only "correct" secrets (all equal) and zeros
-    res = sgf2n(1, size=size)
-    for i in range(n):
-        a = proj[i]
-        b = a.not_equal(0) * a.not_equal(res) #b=1 implies a is desired res
-        res = res * b.cond_swap(1, a)[0]
+    res = sgf2n(0, size=size)
+    for c, b in zip(candidates, indicators):
+        res = b.cond_swap(res, c)[0]
     return res
 
 
@@ -131,6 +128,26 @@ if __name__ == "__main__":
         @else_
         def _():
             print_ln("✅ TEST 1 PASSED")
+
+        print_ln("-----TEST 2: Vectorized-----")
+        msg = sgf2n(list(range(100)))
+        size = 100
+        shares = robust_lr_share(
+            msg=msg,
+            threshold=2,
+            num_parties=3,
+            mu=1,
+            secpar=40,
+            size=size
+        )
+        rec_msg = robust_lr_rec(shares, size=size)
+        error_pattern = (rec_msg - msg).reveal()
+        @if_e(error_pattern != cgf2n(0))
+        def _():
+            print_ln("❌ TEST 2 FAILED\nreconstructed message=%s\nexpected message=%s", rec_msg.reveal(), msg.reveal())
+        @else_
+        def _():
+            print_ln("✅ TEST 2 PASSED")
     
     compiler.compile_func()
 
