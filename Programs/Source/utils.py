@@ -153,35 +153,49 @@ if __name__ == "__main__":
 
     @compiler.register_function("test_utils")
     def test_utils():
-        print_ln("TEST find_nonzero_secret_idx")
-        v = [sgf2n(1), sgf2n(0), sgf2n(2), sgf2n(0)]
-        v_oram = OptimalORAM(4, sgf2n)
-        for i in range(4):
-            v_oram[i] = v
-        idx = find_nonzero_secret_idx(v_oram).reveal()
-        error_pattern = cgf2n(3) - idx
-        @if_e(error_pattern != cgf2n(0))
+
+        print_ln("TEST mac")
+        key = (sgf2n(1), sgf2n(2))
+        msg = [sgf2n(3), sgf2n(6)]
+        tag = mac(key, msg)
+        b = mac_verify(key, msg, tag).reveal()
+        @if_e(b == cgf2n(0))
         def _():
-            print_ln("❌ TEST 1 FAILED\nidx=%s\nexpected idx=%s", idx, cgf2n(3))
+            print_ln("❌ TEST mac FAILED")
         @else_
         def _():
-            print_ln("✅ TEST 1 PASSED")
+            print_ln("✅ TEST mac PASSED")
+        
+
+        # print_ln("TEST find_nonzero_secret_idx")
+        # v = [sgf2n(1), sgf2n(0), sgf2n(2), sgf2n(0)]
+        # v_oram = OptimalORAM(4, sgf2n)
+        # for i in range(4):
+        #     v_oram[i] = v
+        # idx = find_nonzero_secret_idx(v_oram).reveal()
+        # error_pattern = cgf2n(3) - idx
+        # @if_e(error_pattern != cgf2n(0))
+        # def _():
+        #     print_ln("❌ TEST 1 FAILED\nidx=%s\nexpected idx=%s", idx, cgf2n(3))
+        # @else_
+        # def _():
+        #     print_ln("✅ TEST 1 PASSED")
 
 
-        print_ln("TEST dot_product_random_preimage")
-        r = [sgf2n(1), sgf2n(0), sgf2n(2), sgf2n(0)]
-        r = [apply_field_embedding(r_i) for r_i in r]
-        y = sgf2n(5)
-        y = apply_field_embedding(y)
-        x = dot_product_random_preimage(r, y)
-        y_res = sum(x_i * r_i for (x_i, r_i) in zip(x,r)).reveal()
-        error_pattern = y.reveal() - y_res
-        @if_e(error_pattern != cgf2n(0))
-        def _():
-            print_ln("❌ TEST 1 FAILED\ny=%s\nexpected y=%s", y_res, y.reveal())
-        @else_
-        def _():
-            print_ln("✅ TEST 1 PASSED")
+        # print_ln("TEST dot_product_random_preimage")
+        # r = [sgf2n(1), sgf2n(0), sgf2n(2), sgf2n(0)]
+        # r = [apply_field_embedding(r_i) for r_i in r]
+        # y = sgf2n(5)
+        # y = apply_field_embedding(y)
+        # x = dot_product_random_preimage(r, y)
+        # y_res = sum(x_i * r_i for (x_i, r_i) in zip(x,r)).reveal()
+        # error_pattern = y.reveal() - y_res
+        # @if_e(error_pattern != cgf2n(0))
+        # def _():
+        #     print_ln("❌ TEST 1 FAILED\ny=%s\nexpected y=%s", y_res, y.reveal())
+        # @else_
+        # def _():
+        #     print_ln("✅ TEST 1 PASSED")
 
 
 

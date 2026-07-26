@@ -26,15 +26,14 @@ def robust_lr_share(
     '''
     n = num_parties
     lr_shares = lr_share(msg, threshold, n, mu, secpar, size)
-    # off_diagonal = {(j,i) in {0,...,n-1} x {0,...,n-1} : j != i}
-    off_diagonal = list(filter(lambda pair : pair[0] != pair[1], product(range(n),repeat=2)))
-    keys = {(j,i): (get_random_sgf2n(128, size=size), get_random_sgf2n(128, size=size)) for j,i in off_diagonal}
-    tags = {(j,i): mac(keys[(j,i)], list(chain.from_iterable(lr_shares[i]))) for j,i in off_diagonal}
+    pairs = list(product(range(n),repeat=2))
+    keys = {(j,i): (get_random_sgf2n(128, size=size), get_random_sgf2n(128, size=size)) for j,i in pairs}
+    tags = {(j,i): mac(keys[(j,i)], list(chain.from_iterable(lr_shares[i]))) for j,i in pairs}
     robust_shares = [
         (
          lr_shares[i], 
-         [keys[(i,j)] for j in range(n) if j != i], 
-         [tags[(j,i)] for j in range(n) if j != i]
+         [keys[(i,j)] for j in range(n)], 
+         [tags[(j,i)] for j in range(n)]
         ) 
         for i in range(n)
     ]
@@ -50,17 +49,11 @@ def robust_lr_rec(
     '''
     n = len(shares) 
     lr_shares = [s[0] for s in shares]
-    # off_diagonal = {(j,i) in {0,...,n-1} x {0,...,n-1} : j != i}
-    off_diagonal = list(filter(lambda pair : pair[0] != pair[1], product(range(n),repeat=2)))
-    keys = {(i,j): shares[i][1][j] for i,j in off_diagonal}
-    tags = {(i,j): shares[j][2][i] for i,j in off_diagonal}
+    pairs = list(product(range(n),repeat=2))
+    keys = {(i,j): shares[i][1][j] for i,j in pairs}
+    tags = {(i,j): shares[j][2][i] for i,j in pairs}
     candidates = [None for _ in range(n)]
     for i in range(n):
-        is_valid_share = {
-            j: mac_verify(keys[(i,j)], lr_shares[j], tags[(i,j)]) 
-            for j in range(n) if j != i
-        } 
-        is_valid_share[i] = sgf2n(1, size=size) # party i trusts his own share
         '''
         We only want to reconstruct using lr_shares[i] if the i-th share is
         valid. Ideally, we would just filter lr_shares into a list containing
@@ -78,7 +71,14 @@ def robust_lr_rec(
         bitmap as input, and proceed as in lr_rec, using oblivious
         reconstruction instead of the normal Shamir reconstruction.
         '''
-        valid_coords = list(is_valid_share.values()) 
+        valid_coords = []
+        for j in range(n):
+            b = mac_verify(
+                    keys[(i,j)], 
+                    list(chain.from_iterable(lr_shares[j])), 
+                    tags[(i,j)]
+                )
+            valid_coords.append(b)
         # begin adapted lr_rec code (too lazy to generalize lr_rec)
         [sources, ct, seed_shares, mask_shares_transposed] = list(map(tuple, zip(*lr_shares)))
         mask_shares = list(map(list, zip(*mask_shares_transposed)))
