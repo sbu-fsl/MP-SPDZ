@@ -27,8 +27,15 @@ def robust_lr_share(
     n = num_parties
     lr_shares = lr_share(msg, threshold, n, mu, secpar, size)
     pairs = list(product(range(n),repeat=2))
-    keys = {(j,i): (get_random_sgf2n(128, size=size), get_random_sgf2n(128, size=size)) for j,i in pairs}
-    tags = {(j,i): mac(keys[(j,i)], list(chain.from_iterable(lr_shares[i]))) for j,i in pairs}
+    keys = {
+        (j,i): (get_random_sgf2n(128, size=size), get_random_sgf2n(128, size=size)) 
+        for j,i in pairs
+    }
+    tags = {}
+    for i in range(n):
+        src, ct, ss, mst = lr_shares[i]
+        for j in range(n):
+            tags[(j,i)] = mac(keys[(j,i)], [*src, ct, *ss, *mst])
     robust_shares = [
         (
          lr_shares[i], 
@@ -73,9 +80,10 @@ def robust_lr_rec(
         '''
         valid_coords = []
         for j in range(n):
+            src, ct, ss, mst = lr_shares[j]
             b = mac_verify(
                     keys[(i,j)], 
-                    list(chain.from_iterable(lr_shares[j])), 
+                    [*src, ct, *ss, *mst], 
                     tags[(i,j)]
                 )
             valid_coords.append(b)

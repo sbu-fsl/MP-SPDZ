@@ -22,38 +22,28 @@ compiler = Compiler(usage=usage)
 
 @compiler.register_function('arithmetic')
 def main():
-    # n_bits = 4
-    # sgf2nuintn = get_sgf2nuint(n_bits)
-    # # a = sgf2n(1)
-    # # aa = sgf2n(1)
-    # a = 1
-    # aa = 1
-    # b = sgf2nuintn(a)
-    # c = sgf2nuintn(b)
-    # d = b + c
-    # print_ln("d=%s", d.reveal())
-    
+
     n = 3
     # sgf2nuint_logn = get_sgf2nuint(math.ceil(math.log2(n) + 1))
     # a = sgf2nuint_logn(1)
     # b = a > 2
     # print(type(b))
     # print_ln("b=%s", b.reveal())
-    off_diagonal = list(filter(lambda pair : pair[0] != pair[1], product(range(n),repeat=2)))
-    print(f"off_diagonal={off_diagonal}")
-    keys = {(j,i): (cgf2n(j), cgf2n(i)) for j,i in off_diagonal}
-    # tags = {(j,i): mac(keys[(j,i)], list(chain.from_iterable(lr_shares[i]))) for j,i in off_diagonal}
-    tags = {(j,i): keys[j,i] for j,i in off_diagonal}
-    shares = [
-        (
-            [0],
-            [keys[(i,j)] for j in range(n)], 
-            [tags[(j,i)] for j in range(n) if j != i]
-        )
-        for i in range(n)
-    ]
-    print(shares)
-    rkeys = {(i,j): shares[i][1][j] for i,j in off_diagonal}
+    # off_diagonal = list(filter(lambda pair : pair[0] != pair[1], product(range(n),repeat=2)))
+    # print(f"off_diagonal={off_diagonal}")
+    # keys = {(j,i): (cgf2n(j), cgf2n(i)) for j,i in off_diagonal}
+    # # tags = {(j,i): mac(keys[(j,i)], list(chain.from_iterable(lr_shares[i]))) for j,i in off_diagonal}
+    # tags = {(j,i): keys[j,i] for j,i in off_diagonal}
+    # shares = [
+    #     (
+    #         [0],
+    #         [keys[(i,j)] for j in range(n)], 
+    #         [tags[(j,i)] for j in range(n) if j != i]
+    #     )
+    #     for i in range(n)
+    # ]
+    # print(shares)
+    # rkeys = {(i,j): shares[i][1][j] for i,j in off_diagonal}
 
 
    
