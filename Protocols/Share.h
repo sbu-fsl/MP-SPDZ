@@ -70,17 +70,13 @@ class Share_ : public ShareInterface
    static int threshold(int nplayers)
      { return T::threshold(nplayers); }
 
-   template<class U>
-   static void read_or_generate_mac_key(string directory, const Player& P,
-           U& key);
-
    static void specification(octetStream& os);
 
    static mac_key_type get_mac_key();
    static void set_mac_key(const mac_key_type& mac_key);
 
    static Share_ constant(const open_type& aa, int my_num, const typename V::Scalar& alphai)
-     { return Share_(aa, my_num, alphai); }
+     { Share_ res; res.assign(aa, my_num, alphai); return res; }
 
    template<class U, class W>
    void assign(const Share_<U, W>& S)
@@ -94,8 +90,6 @@ class Share_ : public ShareInterface
    Share_()                   {}
    template<class U, class W>
    Share_(const Share_<U, W>& S) { assign(S); }
-   Share_(const open_type& aa, int my_num, const typename V::Scalar& alphai)
-     { assign(aa, my_num, alphai); }
    Share_(const T& share, const V& mac) : a(share), mac(mac) {}
 
    const T& get_share() const          { return a; }
@@ -174,6 +168,7 @@ public:
     typedef T sacri_type;
     typedef typename T::Square Rectangle;
     typedef Rectangle Square;
+    typedef This part_type;
 
     typedef MAC_Check_<Share> MAC_Check;
     typedef Direct_MAC_Check<Share> Direct_MC;

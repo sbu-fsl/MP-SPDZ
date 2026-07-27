@@ -1,6 +1,7 @@
 import math
 import operator
 from functools import reduce
+from Compiler.exceptions import *
 
 def format_trace(trace, prefix='  '):
     if trace is None:
@@ -40,11 +41,11 @@ def mod2m(a, b, bits, signed):
     else:
         return a.mod2m(b, bits, signed=signed)
 
-def trunc_zeros(a, n_zeros, bit_length=None):
+def trunc_zeros(a, n_zeros, bit_length=None, **kwargs):
     if isinstance(a, int):
         return a >> n_zeros
     else:
-        return a.trunc_zeros(n_zeros, bit_length)
+        return a.trunc_zeros(n_zeros, bit_length, **kwargs)
 
 def right_shift(a, b, bits):
     if isinstance(a, int):
@@ -91,8 +92,9 @@ def if_else(cond, a, b):
         else:
             return cond.if_else(a, b)
     except:
-        print(cond, a, b)
-        raise
+        raise CompilerError(
+            'incompatible types for ternary/if-else operator: %s' % '/'.join(
+                type(x).__name__ for x in (cond, a, b)))
 
 def cond_swap(cond, a, b):
     if isinstance(cond, (bool, int)):

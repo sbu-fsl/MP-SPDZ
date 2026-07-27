@@ -37,10 +37,9 @@ public:
     Names& N;
     Player* P;
     PRNG secure_prng;
+    ThreadQueue queue;
 
     int thread_num;
-    WaitQueue<ScheduleItem> tape_schedule;
-    WaitQueue<int> done;
     pthread_t thread;
 
     static Thread<T>& s();
@@ -56,6 +55,10 @@ public:
 
     void join_tape();
     void finish();
+
+    virtual NamedCommStats extra_comm() { return {}; }
+
+    virtual TimerWithComm prep_time() { return {} ; }
 };
 
 template<class T>

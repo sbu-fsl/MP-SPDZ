@@ -27,10 +27,18 @@ public:
     template <class FD>
     PairwiseSetup<FD>& setup();
 
+    template <class FD>
+    PairwiseSetup<FD>& get_setup()
+    {
+        return setup<FD>();
+    }
+
     void pack(octetStream& os) const;
     void unpack(octetStream& os);
 
     void check(Player& P) const;
+
+    int comp_sec();
 };
 
 class RealPairwiseMachine : public virtual MachineBase, public virtual PairwiseMachine

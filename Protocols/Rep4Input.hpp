@@ -72,8 +72,12 @@ void Rep4Input<T>::exchange()
 {
     P.pass_around(to_send, to_receive[0], -1);
     P.pass_around(to_send, to_receive[1], 1);
-    for (int i = 0; i < 2; i++)
-        hashes[i].update(to_receive[i]);
+
+    if (not OnlineOptions::singleton.semi_honest)
+        for (int i = 0; i < 2; i++)
+            hashes[i].update(to_receive[i]);
+
+    check();
 }
 
 template<class T>

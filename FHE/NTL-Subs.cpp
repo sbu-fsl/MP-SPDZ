@@ -52,7 +52,7 @@ template <>
 int generate_semi_setup(int plaintext_length, int sec,
     FHE_Params& params, FFT_Data& FTD, bool round_up, int n)
 {
-  CODE_LOCATION
+  CODE_LOCATION_NO_SCOPE
   int m = 1024;
   int lgp = plaintext_length;
   bigint p;
@@ -95,7 +95,7 @@ template <>
 int generate_semi_setup(int plaintext_length, int sec,
     FHE_Params& params, P2Data& P2D, bool round_up, int n)
 {
-  CODE_LOCATION
+  CODE_LOCATION_NO_SCOPE
 
   if (params.n_mults() > 0)
     throw runtime_error("only implemented for 0-level BGV");
@@ -113,12 +113,13 @@ int generate_semi_setup(int plaintext_length, int sec,
 
 int common_semi_setup(FHE_Params& params, int m, bigint p, int& lgp0, int lgp1, bool round_up)
 {
-#ifdef VERBOSE
-  cout << "Need ciphertext modulus of length " << lgp0;
-  if (params.n_mults() > 0)
-    cout << "+" << lgp1;
-  cout << " and " << phi_N(m) << " slots" << endl;
-#endif
+  if (OnlineOptions::singleton.has_option("verbose_he_setup"))
+    {
+      cout << "Need ciphertext modulus of length " << lgp0;
+      if (params.n_mults() > 0)
+        cout << "+" << lgp1;
+      cout << " and " << phi_N(m) << " slots" << endl;
+    }
 
   int extra_slack = 0;
   if (round_up)
@@ -160,13 +161,16 @@ int finalize_lengths(int& lg2p0, int& lg2p1, int n, int m, int* lg2pi,
 {
   (void) lg2pi, (void) n;
 
-#ifdef VERBOSE
-  if (n >= 2 and n <= 10)
-    cout << "Difference to suggestion for p0: " << lg2p0 - lg2pi[n - 2]
-        << ", for p1: " << lg2p1 - lg2pi[9 + n - 2] << endl;
-  cout << "p0 needs " << int(ceil(1. * lg2p0 / 64)) << " words" << endl;
-  cout << "p1 needs " << int(ceil(1. * lg2p1 / 64)) << " words" << endl;
-#endif
+  bool verbose = OnlineOptions::singleton.has_option("verbose_he_setup");
+
+  if (verbose)
+    {
+        if (n >= 2 and n <= 10)
+            cerr << "Difference to suggestion for p0: " << lg2p0 - lg2pi[n - 2]
+                    << ", for p1: " << lg2p1 - lg2pi[9 + n - 2] << endl;
+        cerr << "p0 needs " << int(ceil(1. * lg2p0 / 64)) << " words" << endl;
+        cerr << "p1 needs " << int(ceil(1. * lg2p1 / 64)) << " words" << endl;
+    }
 
   int extra_slack = 0;
   if (round_up)
@@ -185,15 +189,16 @@ int finalize_lengths(int& lg2p0, int& lg2p1, int n, int m, int* lg2pi,
       extra_slack = 2 * i;
       lg2p0 += i;
       lg2p1 += i;
-#ifdef VERBOSE
-      cout << "Rounding up to " << lg2p0 << "+" << lg2p1
-          << ", giving extra slack of " << extra_slack << " bits" << endl;
-#endif
+
+        if (verbose)
+            cerr << "Rounding up to " << lg2p0 << "+" << lg2p1
+                    << ", giving extra slack of " << extra_slack << " bits"
+                    << endl;
     }
 
-#ifdef VERBOSE
-  cout << "Total length: " << lg2p0 + lg2p1 << endl;
-#endif
+    if (verbose)
+        cerr << "Total length: " << lg2p0 + lg2p1 << " = " << lg2p0 << " + "
+                << lg2p1 << endl;
 
   return extra_slack;
 }
@@ -305,7 +310,7 @@ void generate_modulus(bigint& pr, const int m, const bigint p, const int lg2pr,
 template <>
 void Parameters::SPDZ_Data_Setup(FHE_Params& params, FFT_Data& FTD)
 {
-  CODE_LOCATION
+  CODE_LOCATION_NO_SCOPE
 
   bigint p;
   int idx, m;
@@ -507,6 +512,8 @@ void init(P2Data& P2D,const Ring& Rg)
       throw invalid_params();
     }
 
+  bool verbose = OnlineOptions::singleton.has_option("verbose_he_setup");
+
   int max_tries = 10;
   for (int seed = 0;; seed++)
     { QGrp.assign(Rg.m(),seed);       // QGrp encodes the the quotient group Z_m^*/<2>
@@ -522,7 +529,7 @@ void init(P2Data& P2D,const Ring& Rg)
               cerr << "abort after " << max_tries << " tries" << endl;
               throw invalid_params();
             }
-          else
+          else if (verbose)
             cout << "Group order wrong, need to repeat the Haf-Mc algorithm"
                 << endl;
         }
@@ -541,14 +548,17 @@ void init(P2Data& P2D,const Ring& Rg)
   GF2EX Ga=to_GF2EX(G);     // represent G as a polynomial over the extension field
   Rts[0]=rep(FindRoot(Ga)); // Find a roof of G in this field
 
-  cout << "Fixing field ordering and the maps (Need to count to " << Gord << " here)\n\t";
+  if (verbose)
+    cout << "Fixing field ordering and the maps (Need to count to " << Gord << " here)\n\t";
   GF2E::init(G);
   GF2X g;
   vector<int> used(facts.length());
   for (int i=0; i<facts.length(); i++) { used[i]=0; }
   used[0]=1;
   for (int i=0; i<Gord; i++)
-    { cout << i << " " << flush;
+    {
+      if (verbose)
+        cout << i << " " << flush;
       if (i!=0)
         { int hpow=QGrp.nth_element(i);
           Rts[i]=Subs_PowX_Mod(Rts[0],hpow,Rg.m(),F);
@@ -581,7 +591,8 @@ void init(P2Data& P2D,const Ring& Rg)
      GF2X tei=InvMod(te%Fi[i],Fi[i]);
      u[i]=MulMod(te,tei,F); // u[i] = \prod_{j!=i} F[j]*(F[j]^{-1} mod F[i])
    }
-  cout << endl;
+  if (verbose)
+    cout << endl;
 
   // Make the forward matrix
   //   This is a deg(F) x (deg(G)*Gord)  matrix which maps elements
@@ -678,7 +689,7 @@ void char_2_dimension(int& m, int& lg2)
 template <>
 void Parameters::SPDZ_Data_Setup(FHE_Params& params, P2Data& P2D)
 {
-  CODE_LOCATION
+  CODE_LOCATION_NO_SCOPE
 
   int n = n_parties;
   int lg2 = plaintext_length;
@@ -686,9 +697,11 @@ void Parameters::SPDZ_Data_Setup(FHE_Params& params, P2Data& P2D)
   int lg2pi[2][9]
              = {  {70,70,70,70,70,70,70,70,70},
                   {70,75,75,75,75,80,80,80,80}
-               };
 
-  cout << "Setting up parameters\n";
+  };
+  bool verbose = OnlineOptions::singleton.has_option("verbose_he_setup");
+  if (verbose)
+    cout << "Setting up parameters\n";
   if ((n<2 || n>10) and sec == -1) { throw invalid_params(); }
 
   int m,lg2p0,lg2p1,ex;
@@ -709,7 +722,8 @@ void Parameters::SPDZ_Data_Setup(FHE_Params& params, P2Data& P2D)
   if (NoiseBounds::min_phi_m(lg2p0 + lg2p1, params) * 2 > m)
     throw runtime_error("number of slots too small");
 
-  cout << "m = " << m << endl;
+  if (verbose)
+    cout << "m = " << m << endl;
   init(R,m);
 
   if (lg2p0==0 || lg2p1==0) { throw invalid_params(); }
@@ -724,16 +738,21 @@ void Parameters::SPDZ_Data_Setup(FHE_Params& params, P2Data& P2D)
   ex=lg2p0-2*lg2m;
   pr0=1; pr0=(pr0<<ex)*step+1;
   while (!probPrime(pr0)) { pr0=pr0+step; }
-  cout << "\t pr0 = " << pr0 << "  :   " << numBits(pr0) << endl;
+  if (verbose)
+    cout << "\t pr0 = " << pr0 << "  :   " << numBits(pr0) << endl;
 
   ex=lg2p1-2*lg2m;
   pr1=1; pr1=(pr1<<ex)*step+1;
   while (!probPrime(pr1) || pr1==pr0) { pr1=pr1+step; }
-  cout << "\t pr1 = " << pr1 << "  :   " << numBits(pr1) <<  endl;
 
-  cout << "\t\tFollowing should be both 1" << endl;
-  cout << "\t\tpr1 mod m = " << pr1%m << endl;
-  cout << "\t\tpr1 mod 2^lg2m = " << pr1%(1<<lg2m) << endl;
+  if (verbose)
+    {
+      cout << "\t pr1 = " << pr1 << "  :   " << numBits(pr1) <<  endl;
+
+      cout << "\t\tFollowing should be both 1" << endl;
+      cout << "\t\tpr1 mod m = " << pr1%m << endl;
+      cout << "\t\tpr1 mod 2^lg2m = " << pr1%(1<<lg2m) << endl;
+    }
 
   gf2n_short::init_field(lg2);
   load_or_generate(P2D, R);

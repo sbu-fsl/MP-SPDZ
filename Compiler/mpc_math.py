@@ -131,7 +131,7 @@ def p_eval(p_c, x):
     local_aggregation = 0
     # Evaluation of the Polynomial
     for i, pre_mult in zip(p_c[1:], pre_mults):
-        local_aggregation += pre_mult.mul_no_reduce(x.coerce(i))
+        local_aggregation += pre_mult.mul_no_reduce(i)
     return local_aggregation.reduce_after_mul() + p_c[0]
 
 
@@ -148,7 +148,8 @@ def p_eval(p_c, x):
 # @return b2: \{0,1\} value. Returns one when reduction to
 # \pi is greater than \pi/2.
 def sTrigSub(x):
-    library.get_program().reading('trigonometric functions', 'AS19')
+    library.get_program().reading('trigonometric functions', 'AS19',
+                                  'Section 4')
     # reduction to 2* \pi
     f = x * (1.0 / (2 * pi))
     f = trunc(f)
@@ -267,7 +268,7 @@ def exp2_fx(a, zero_output=False, as19=False):
 
     :return: :math:`2^a` if it is within the range. Undefined otherwise
     """
-    library.get_program().reading('exponential', 'AS19')
+    library.get_program().reading('exponential', 'AS19', 'Protocol 6')
     def exp_from_parts(whole_exp, frac):
         class my_fix(type(a)):
             pass
@@ -316,7 +317,7 @@ def exp2_fx(a, zero_output=False, as19=False):
                 s = sint.conv(bits[-1])
                 lower = a.v.raw_mod2m(a.f) - (lower_overflow << a.f)
             else:
-                bits = sbitvec(a.v, a.k)
+                bits = sbitvec(a.v, a.k).v
                 s = sint.conv(bits[-1])
                 lower = sint.bit_compose(sint.conv(b) for b in bits[:a.f])
             higher_bits = bits[a.f:n_bits]
@@ -392,34 +393,76 @@ def exp2_fx(a, zero_output=False, as19=False):
         return s.if_else(1 / g, g)
 
 
-def mux_exp(x, y, block_size=8):
+def mux_exp(x, y, block_size=8, neg_only=False, time=False, debug=False):
+    library.get_program().reading('exponential', 'KS26')
     assert util.is_constant_float(x)
     from Compiler.GC.types import sbitvec, sbits
-    bits = sbitvec.from_vec(y.v.bit_decompose(y.k, maybe_mixed=True)).v
-    sign = bits[-1]
-    m = math.log(2 ** (y.k - y.f - 1), x)
-    del bits[int(math.ceil(math.log(m, 2))) + y.f:]
+    if time:
+        library.start_timer(1)
+    bits = sbitvec(y.v, y.k).v
+    if time:
+        library.stop_timer(1)
+        library.start_timer(2)
+    if neg_only:
+        m = -math.log(2 ** -y.f, x)
+        int_bits = min(math.log(m, 2), y.k - y.f - 2)
+        if debug:
+            print (m, int_bits)
+        del bits[int(math.ceil(int_bits)) + y.f + 1:]
+    else:
+        m = math.log(2 ** (y.k - y.f - 1), x)
+        del bits[int(math.ceil(math.log(m, 2))) + y.f + 2:]
     parts = []
     for i in range(0, len(bits), block_size):
-        one_hot = sbitvec.from_vec(bits[i:i + block_size]).demux().v
+        if time:
+            library.start_timer(21)
+        block_bits = sbitvec.from_vec(bits[i:i + block_size])
+        if debug:
+            library.print_ln('block bits %s', block_bits.reveal())
+        one_hot = block_bits.demux().v
+        if time:
+            library.stop_timer(21)
         exp = []
-        try:
-            for j in range(len(one_hot)):
-                exp.append(types.cfix.int_rep(x ** (j * 2 ** (i - y.f)), y.f))
-        except OverflowError:
-            pass
-        exp = list(filter(lambda x: x < 2 ** (y.k - 1), exp))
-        bin_part = [0] * max(x.bit_length() for x in exp)
+        for j in range(len(one_hot)):
+            try:
+                if neg_only:
+                    pos = i < len(bits) - block_size
+                else:
+                    pos = j < len(one_hot) / 2 or i < len(bits) - block_size
+                if pos:
+                    entry = j * 2 ** (i - y.f)
+                else:
+                    entry = (j - len(one_hot)) * 2 ** (i - y.f)
+                exp.append(types.cfix.int_rep(x ** entry, y.f))
+            except OverflowError:
+                exp.append(0)
+        if debug:
+            print('table values in block %d (%d):' % (i, len(exp)),
+                  [e * 2 ** -y.f for e in exp])
+        max_res = 2 ** (y.k - 1)
+        bin_part = [0] * max(x.bit_length() for x in exp if x < max_res)
         for j in range(len(bin_part)):
             for k, (a, b) in enumerate(zip(one_hot, exp)):
-                bin_part[j] ^= a if util.bit_decompose(b, len(bin_part))[j] \
-                    else 0
+                if b < max_res and b != 0:
+                    bin_part[j] ^= a if util.bit_decompose(b, len(bin_part))[j] \
+                        else 0
             if util.is_zero(bin_part[j]):
                 bin_part[j] = sbits.get_type(y.size)(0)
-            if i == 0:
-                bin_part[j] = sign.if_else(0, bin_part[j])
+        if time:
+            library.start_timer(23)
         parts.append(y._new(y.int_type(sbitvec.from_vec(bin_part))))
-    return util.tree_reduce(operator.mul, parts)
+        if time:
+            library.stop_timer(23)
+    if debug:
+        for part in parts:
+            library.print_ln('parts %s', util.reveal(part))
+    if time:
+        library.stop_timer(2)
+        library.start_timer(3)
+    res = util.tree_reduce(operator.mul, parts)
+    if time:
+        library.stop_timer(3)
+    return res
 
 
 @types.vectorize
@@ -437,7 +480,7 @@ def log2_fx(x, use_division=True):
     :return: (sfix) the value of :math:`\log_2(x)`
 
     """
-    library.get_program().reading('logarithm', 'AS19')
+    library.get_program().reading('logarithm', 'AS19', 'Section 5')
     if isinstance(x, types._fix):
         # transforms sfix to f*2^n, where f is [o.5,1] bounded
         # obtain number bounded by [0,5 and 1] by transforming input to sfloat
@@ -815,7 +858,7 @@ def sqrt(x, k=None, f=None):
 
     :return:  square root of :py:obj:`x` (sfix).
     """
-    library.get_program().reading('square root', 'AS19')
+    library.get_program().reading('square root', 'AS19', 'Section 3')
     if k is None:
         k = x.k
     if f is None:
@@ -837,7 +880,8 @@ def atan(x):
 
     :return:  arctan of :py:obj:`x` (sfix).
     """
-    library.get_program().reading('inverse trigonometric functions', 'AS19')
+    library.get_program().reading('inverse trigonometric functions', 'AS19',
+                                  'Protocol 5')
     # obtain absolute value of x
     s = x < 0
     x_abs  = s.if_else(-x, x)

@@ -86,7 +86,8 @@ T Create_Random(const Player& P)
 }
 
 /* Produce a random seed of length len */
-void Create_Random_Seed(octet* seed,const PlayerBase& P,int len);
+void Create_Random_Seed(octet* seed, const PlayerBase& P, int len,
+    const vector<bool>& parties = {});
 
 
 

@@ -13,15 +13,16 @@
  */
 class OTTripleSetup
 {
+    typedef vector< array<BitVector, 2> > sender_type;
+    typedef vector<BitVector> receiver_type;
+
     void run(int i);
 
-    BitVector base_receiver_inputs;
     vector<BaseOT*> baseOTs;
 
     PRNG G;
     int nparties;
     int my_num;
-    int nbase;
 
 public:
     class SetupJob
@@ -45,17 +46,23 @@ public:
 
     map<string,Timer> timers;
     vector<TwoPartyPlayer*> players;
-    vector< vector< array<BitVector, 2> > > baseSenderInputs;
-    vector< vector<BitVector> > baseReceiverOutputs;
+    vector<sender_type> baseSenderInputs;
+    vector<receiver_type> baseReceiverOutputs;
+    BitVector base_receiver_inputs;
 
     int get_nparties() const { return nparties; }
-    int get_nbase() const { return nbase; }
+    int get_nbase() const { return base_receiver_inputs.size(); }
     int get_my_num() const { return my_num; }
     int get_base_receiver_input(int i) const { return base_receiver_inputs[i]; }
 
-    OTTripleSetup(Player& N, bool real_OTs = true)
-        : nparties(N.num_players()), my_num(N.my_num()), nbase(128)
+    OTTripleSetup() : nparties(0), my_num(0)
     {
+    }
+
+    OTTripleSetup(Player& N, bool real_OTs = true)
+        : nparties(N.num_players()), my_num(N.my_num())
+    {
+        int nbase = 128;
         base_receiver_inputs.resize(nbase);
         baseOTs.resize(nparties - 1);
         baseSenderInputs.resize(nparties - 1);
@@ -103,6 +110,20 @@ public:
     //T get_mac_key();
 
     OTTripleSetup get_fresh();
+
+    int index_for(int other)
+    {
+        assert(other != my_num);
+        if (other > my_num)
+            return other - 1;
+        else
+            return other;
+    }
+
+    void pack(octetStream& os) const;
+    void unpack(octetStream& os);
+
+    void check(TwoPartyPlayer& P);
 };
 
 class OnDemandOTTripleSetup

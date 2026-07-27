@@ -132,7 +132,7 @@ void PartSetup<FD>::output(Names& N)
 {
     // Write outputs to file
     string dir = get_prep_sub_dir<Share<typename FD::T>>(N.num_players());
-    write_online_setup(dir, FieldD.get_prime());
+    FieldD.write_setup(dir);
     write_mac_key(dir, N.my_num(), N.num_players(), alphai);
 }
 
@@ -197,9 +197,9 @@ bool PartSetup<FD>::operator!=(const PartSetup<FD>& other)
 
 template<class FD>
 void PartSetup<FD>::secure_init(Player& P, MachineBase& machine,
-    int plaintext_length, int sec)
+    int plaintext_length, int sec, bool read_only)
 {
-    ::secure_init(*this, P, machine, plaintext_length, sec, params);
+    ::secure_init(*this, P, machine, plaintext_length, sec, params, read_only);
 }
 
 template<class FD>

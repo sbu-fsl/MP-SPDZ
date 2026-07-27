@@ -11,6 +11,7 @@
 #include "GC/instructions.h"
 
 #include "Memory.hpp"
+#include "Instruction.hpp"
 
 #include <iomanip>
 
@@ -67,6 +68,29 @@ void Instruction::execute_regint(ArithmeticProcessor& Proc, MemoryPart<Integer>&
         case NAME: { PRE; for (int i = 0; i < size; i++) { CODE; } } break;
         REGINT_INSTRUCTIONS
 #undef X
+    }
+}
+
+void Instruction::incint(StackedVector<Integer>& Ci) const
+{
+    auto base = Ci[r[1]];
+    if (start[0] == 1 and start[1] >= size_t(size))
+    {
+        for (auto& dest : Ci.span_for_size(r[0], size))
+        {
+            dest = base;
+            base += int(n);
+        }
+    }
+    else
+    {
+        auto dest = Ci.begin() + r[0];
+        assert(dest + size <= Ci.end());
+        for (int i = 0; i < size; i++)
+        {
+            int inc = (i / start[0]) % start[1];
+            *dest++ = base + inc * int(n);
+        }
     }
 }
 

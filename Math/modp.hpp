@@ -57,15 +57,17 @@ void modp_<L>::unpack(octetStream& o,const Zp_Data& ZpD)
 }
 
 template<int L>
+template<int LL>
 void modp_<L>::unpack(octetStream& o)
 {
-  o.consume((octet*) x,L*sizeof(mp_limb_t));
+  o.consume((octet*) x, LL);
 }
 
 template<int L>
+template<int LL>
 void modp_<L>::pack(octetStream& o) const
 {
-  o.append((octet*) x,L*sizeof(mp_limb_t));
+  o.append((octet*) x, LL);
 }
 
 template<int L>
@@ -332,7 +334,7 @@ void modp_<L>::output(ostream& s, const Zp_Data& ZpD, bool human, bool signed_) 
   if (human)
     { bigint te;
       to_bigint(te, ZpD);
-      if (te < ZpD.pr / 2 or not signed_)
+      if (te <= ZpD.pr_half or not signed_)
           s << te;
       else
           s << (te - ZpD.pr);

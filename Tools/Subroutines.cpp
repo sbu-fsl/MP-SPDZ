@@ -130,9 +130,15 @@ int Open_Challenge(vector<unsigned int>& e,vector<octetStream>& Open_e,
 }
 
 
-void Create_Random_Seed(octet* seed,const PlayerBase& P,int len)
+void Create_Random_Seed(octet* seed, const PlayerBase& P, int len,
+    const vector<bool>& parties)
 {
   CODE_LOCATION
+
+  vector<bool> my_parties = parties;
+  if (my_parties.empty())
+    my_parties.resize(P.num_players(), true);
+
   PRNG G;
   G.ReSeed();
   vector<octetStream> e(P.num_players());
@@ -141,19 +147,27 @@ void Create_Random_Seed(octet* seed,const PlayerBase& P,int len)
 
   G.get_octetStream(e[P.my_num()],len);
   Commit(Comm_e[P.my_num()],Open_e[P.my_num()],e[P.my_num()],P.my_num());
-  P.Broadcast_Receive(Comm_e);
+  P.partial_broadcast(my_parties, my_parties, Comm_e);
 
-  P.Broadcast_Receive(Open_e);
+  P.partial_broadcast(my_parties, my_parties, Open_e);
 
   memset(seed,0,len*sizeof(octet));
   for (int i = 0; i < P.num_players(); i++)
-    { if (i != P.my_num())
-        { if (!Open(e[i],Comm_e[i],Open_e[i],i))
-             { throw invalid_commitment(); }
+    if (my_parties.at(i))
+      {
+        if (i != P.my_num())
+          {
+            if (!Open(e[i], Comm_e[i], Open_e[i], i))
+              throw invalid_commitment();
           }
-      for (int j=0; j<len; j++)
-	{ seed[j]=seed[j]^(e[i].get_data()[j]); }
-    }
+        for (int j = 0; j < len; j++)
+          seed[j] ^= *e[i].consume(1);
+      }
+    else
+      {
+        if (Open_e[i].get_length() > 0)
+          throw runtime_error("unexpected information from " + to_string(i));
+      }
 }
 
 
@@ -175,8 +189,6 @@ void Commit_And_Open_(vector<octetStream>& datas, const Player& P, Coordinator& 
              { throw invalid_commitment(); }
         }
     }
-
-  coordinator.finished();
 }
 
 

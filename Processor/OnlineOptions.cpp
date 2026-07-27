@@ -9,10 +9,12 @@
 #include "Math/gfpvar.h"
 #include "Protocols/HemiOptions.h"
 #include "Protocols/config.h"
+#include "FHEOffline/config.h"
 
 #include "Math/gfp.hpp"
 
 #include <boost/filesystem.hpp>
+#include <regex>
 
 using namespace std;
 
@@ -40,10 +42,16 @@ OnlineOptions::OnlineOptions() : playerno(-1)
     max_broadcast = 0;
     receive_threads = false;
     code_locations = false;
+    have_warned_about_comp_sec = false;
+    semi_honest = false;
 #ifdef VERBOSE
     verbose = true;
 #else
     verbose = false;
+#endif
+
+#ifdef THROW_EXCEPTIONS
+    options.push_back("throw_exceptions");
 #endif
 }
 
@@ -161,11 +169,11 @@ OnlineOptions::OnlineOptions(ez::ezOptionParser& opt, int argc,
 
     opt.get("--options")->getStrings(options);
 
-    code_locations = opt.isSet("--code-locations");
+    for (auto& option : options)
+        if (option.find("verbose") == 0)
+            verbose = true;
 
-#ifdef THROW_EXCEPTIONS
-    options.push_back("throw_exceptions");
-#endif
+    code_locations = opt.isSet("--code-locations");
 
     if (security)
     {
@@ -359,7 +367,8 @@ void OnlineOptions::finalize(ez::ezOptionParser& opt, int argc,
         opt.getUsage(usage);
         cout << usage;
         for (i = 0; i < badOptions.size(); ++i)
-            cerr << "ERROR: Missing required option " << badOptions[i] << ".";
+            cerr << "ERROR: Missing required option " << badOptions[i] << "."
+                    << endl;
         exit(1);
     }
 
@@ -369,7 +378,7 @@ void OnlineOptions::finalize(ez::ezOptionParser& opt, int argc,
         cout << usage;
         for (i = 0; i < badOptions.size(); ++i)
             cerr << "ERROR: Got unexpected number of arguments for option "
-                    << badOptions[i] << ".";
+                    << badOptions[i] << "." << endl;
         exit(1);
     }
 
@@ -425,9 +434,11 @@ void OnlineOptions::finalize_with_error(ez::ezOptionParser& opt)
     if (opt.get("-lgp") and not opt.isSet("-lgp"))
     {
         int prog_lgp = BaseMachine::prime_length_from_schedule(progname);
-        prog_lgp = DIV_CEIL(prog_lgp, 64) * 64;
-        // only increase to be consistent with program not demanding any length
-        if (prog_lgp > lgp)
+        if (prog_lgp > 64)
+            // round up to limb size for more consistency
+            prog_lgp = DIV_CEIL(prog_lgp, 64) * 64;
+
+        if (prog_lgp)
             lgp = prog_lgp;
     }
 
@@ -463,6 +474,7 @@ void OnlineOptions::finalize_with_error(ez::ezOptionParser& opt)
         o->getString(disk_memory);
 
     receive_threads = opt.isSet("--threads");
+    semi_honest = opt.isSet("--semi-honest");
 
     if (use_security_parameter)
     {
@@ -504,4 +516,36 @@ int OnlineOptions::prime_length()
 int OnlineOptions::prime_limbs()
 {
     return DIV_CEIL(prime_length(), 64);
+}
+
+bool OnlineOptions::has_param(const string& param)
+{
+    for (auto& x : options)
+        if (x.find(param + "=") == 0)
+            return true;
+    return false;
+}
+
+int OnlineOptions::get_param(const string& param)
+{
+    basic_regex re(param + "=([0-9]+)");
+    smatch match;
+    for (auto& x : options)
+        if (regex_match(x, match, re))
+            return atoi(match[1].str().c_str());
+    throw runtime_error("parameter not found: " + param);
+}
+
+int OnlineOptions::comp_sec()
+{
+    int res = COMP_SEC;
+    if (has_param("comp_sec"))
+        res = get_param("comp_sec");
+    if (res < 128 and not have_warned_about_comp_sec)
+    {
+        cerr << "WARNING: computational security parameter " << res
+                << " suitable for testing only" << endl;
+        have_warned_about_comp_sec = true;
+    }
+    return res;
 }

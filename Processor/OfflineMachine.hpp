@@ -49,8 +49,7 @@ int OfflineMachine<W>::run()
         T::clear::init_default(this->online_opts.prime_length());
     Machine<T, U>::init_binary_domains(this->online_opts.security_parameter,
             this->get_lg2());
-    auto binary_mac_key = read_generate_write_mac_key<
-            typename T::bit_type::part_type>(P);
+    auto binary_mac_key = T::bit_type::LivePrep::get_mac_key(P);
     typename T::bit_type::LivePrep bit_prep(usage);
     GC::ShareThread<typename T::bit_type> thread(bit_prep, P, binary_mac_key);
 
@@ -86,7 +85,7 @@ void OfflineMachine<W>::generate()
 {
     T::clear::next::template init<typename T::clear>(false);
     T::clear::template write_setup<T>(P.num_players());
-    auto mac_key = read_generate_write_mac_key<T>(P);
+    auto mac_key = T::LivePrep::get_mac_key(P);
     DataPositions generated;
     generated.set_num_players(P.num_players());
     typename T::MAC_Check output(mac_key);
@@ -162,7 +161,7 @@ void OfflineMachine<W>::generate()
         for (auto& x : usage.edabits)
             max_n_bits = max(max_n_bits, x.first.second);
 
-        for (int n_bits = 1; n_bits < max(100, max_n_bits); n_bits++)
+        for (int n_bits = 1; n_bits <= max(100, max_n_bits); n_bits++)
         {
             int batch = edabitvec<T>::MAX_SIZE;
             int total = usage.edabits[{false, n_bits}] +

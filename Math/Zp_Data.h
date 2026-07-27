@@ -21,7 +21,7 @@ using namespace std;
 
 #ifndef MAX_MOD_SZ
    #if defined(GFP_MOD_SZ) and GFP_MOD_SZ > 11
-     #define MAX_MOD_SZ GFP_MOD_SZ
+     #define MAX_MOD_SZ 2 * GFP_MOD_SZ
    #else
      #define MAX_MOD_SZ 11
   #endif
@@ -94,6 +94,11 @@ class Zp_Data
 
   void get_shanks_parameters(bigint& y, bigint& q_half, int& r) const;
 
+  void write_setup(const string& directory) const;
+  void check_setup(const string& directory);
+
+  string fake_opts() const;
+
    template<int L> friend void to_modp(modp_<L>& ans,int x,const Zp_Data& ZpD);
    template<int L> friend void to_modp(modp_<L>& ans,const mpz_class& x,const Zp_Data& ZpD);
 
@@ -136,7 +141,7 @@ inline void Zp_Data::Add<0>(mp_limb_t* ans,const mp_limb_t* x,const mp_limb_t* y
 template<>
 inline void Zp_Data::Add<1>(mp_limb_t* ans,const mp_limb_t* x,const mp_limb_t* y) const
 {
-#if defined(__clang__) || !defined(__x86_64__) || ((__GNUC__ >= 9) && (__GNUC__ <= 11)) || __GNUC__ == 14
+#if defined(__clang__) || !defined(__x86_64__) || ((__GNUC__ >= 9) && (__GNUC__ <= 11)) || __GNUC__ >= 14
   Add<0>(ans, x, y);
 #else
   *ans = *x + *y;

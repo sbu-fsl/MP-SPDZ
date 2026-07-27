@@ -89,9 +89,11 @@ void Rep4RingPrep<T>::buffer_bits()
     vector<typename Rep4<T>::ResTuple> a(batch_size), b(batch_size);
     protocol.prepare_joint_input(0, 1, 3, 2, bits, a);
     protocol.prepare_joint_input(2, 3, 1, 0, bits, b);
+    protocol.append_hashes(protocol.send_os);
     P.send_receive_all(protocol.channels, protocol.send_os, protocol.receive_os);
     protocol.finalize_joint_input(0, 1, 3, 2, a);
     protocol.finalize_joint_input(2, 3, 1, 0, b);
+    protocol.check_hashes(protocol.receive_os);
 
     auto results = protocol.results;
     protocol.init_mul();

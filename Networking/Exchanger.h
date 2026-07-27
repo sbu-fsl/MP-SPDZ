@@ -8,6 +8,7 @@
 
 #include "Tools/octetStream.h"
 #include "Tools/time-func.h"
+#include "Processor/OnlineOptions.h"
 #include "sockets.h"
 
 template<class T>
@@ -28,6 +29,9 @@ class Exchanger
     Timer recv_timer;
     Timer send_timer;
 
+    bool debug;
+    int delay;
+
 public:
     Exchanger(T send_socket, const octetStream& send_stream, T receive_socket,
             octetStream& receive_stream) :
@@ -36,13 +40,20 @@ public:
     {
         len = send_stream.get_length();
         data = send_stream.get_data();
-        send(send_socket, len, LENGTH_SIZE);
+        if (send_socket)
+            send(send_socket, len, LENGTH_SIZE);
         sent = 0;
         received = 0;
         length_received = false;
         new_len = 0;
         n_iter = 0;
         n_send = 0;
+        delay = 1;
+
+        debug = OnlineOptions::singleton.has_option("debug_exchanger");
+        if (debug)
+            cerr << "send at " << send_socket << ", receive at "
+                    << receive_socket << endl;
     }
 
     ~Exchanger()
@@ -60,7 +71,7 @@ public:
     bool round(bool block = true)
     {
         n_iter++;
-        if (sent < len)
+        if (sent < len and send_socket)
         {
 #ifdef TIME_ROUNDS
                 TimeScope ts(send_timer);
@@ -72,14 +83,16 @@ public:
 #endif
             size_t newly_sent = send_non_blocking(send_socket, data + sent,
                     to_send);
-#ifdef TIME_ROUNDS
-                cout << "sent " << newly_sent << "/" << to_send << endl;
-      #endif
+
+            if (debug)
+                cout << "sent " << newly_sent << "/" << to_send << " to "
+                        << send_socket << endl;
+
             sent += newly_sent;
         }
 
         // avoid extra branching, false before length received
-        if (received < new_len)
+        if (received < new_len and receive_socket)
         {
             // if same buffer for sending and receiving
             // only receive up to already sent data
@@ -94,13 +107,19 @@ public:
 #ifdef TIME_ROUNDS
                     TimeScope ts(recv_timer);
       #endif
+
+                if (debug)
+                    cerr << "receive from " << receive_socket << endl;
+
                 if (sent < len or not block)
                 {
                     size_t newly_received = receive_non_blocking(receive_socket,
                             receive_stream.data + received, to_receive);
-#ifdef TIME_ROUNDS
-                        cout << "received " << newly_received << "/" << to_receive << endl;
-      #endif
+
+                    if (debug)
+                        cerr << "received " << newly_received << "/"
+                                << to_receive << endl;
+
                     received += newly_received;
                 }
                 else
@@ -111,11 +130,13 @@ public:
                 }
             }
         }
-        else if (not length_received)
+        else if (not length_received and receive_socket)
         {
 #ifdef TIME_ROUNDS
                 TimeScope ts(recv_timer);
       #endif
+            if (debug)
+                cerr << "receive length from " << receive_socket << endl;
             octet blen[LENGTH_SIZE];
             size_t tmp = LENGTH_SIZE;
             if (sent < len or not block)
@@ -128,9 +149,12 @@ public:
                 receive_stream.resize(max(new_len, len));
                 length_received = true;
             }
+            else
+                usleep(delay = min(10000, 2 * delay));
         }
 
-        return (received < new_len or sent < len or not length_received);
+        return ((received < new_len or not length_received) and receive_socket)
+                or (sent < len and send_socket);
     }
 };
 

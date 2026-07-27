@@ -52,7 +52,8 @@ class Machine : public BaseMachine
 
   RunningTimer setup_timer;
 
-  NamedCommStats max_comm;
+  int max_trunc_size;
+  Lock warn_lock;
 
   size_t load_program(const string& threadname, const string& filename);
 
@@ -89,7 +90,7 @@ class Machine : public BaseMachine
 
   const Names& get_N() { return N; }
 
-  DataPositions run_tapes(const vector<int> &args,
+  DataPositions run_tapes(const ArgVector& args,
       Data_Files<sint, sgf2n>& DataF);
   void fill_buffers(int thread_number, int tape_number,
       Preprocessing<sint> *prep,
@@ -126,6 +127,8 @@ class Machine : public BaseMachine
   Player& get_player() { return *P; }
 
   void check_program();
+
+  void gap_warning(int k);
 };
 
 #endif /* MACHINE_H_ */

@@ -11,9 +11,12 @@
 #include "FHEOffline/DataSetup.hpp"
 
 template<class T>
-PairwiseMachine* CowGearPrep<T>::pairwise_machine = 0;
+PairwiseMachine* CowGearPrep<T>::machine = 0;
 template<class T>
 Lock CowGearPrep<T>::lock;
+
+template<class T>
+typename CowGearPrep<T>::mac_key_type CowGearPrep<T>::maybe_mac_key;
 
 template<class T>
 CowGearPrep<T>::~CowGearPrep()
@@ -25,19 +28,18 @@ CowGearPrep<T>::~CowGearPrep()
 template<class T>
 void CowGearPrep<T>::teardown()
 {
-    if (pairwise_machine)
-        delete pairwise_machine;
+    if (machine)
+        delete machine;
 }
 
 template<class T>
-void CowGearPrep<T>::basic_setup(Player& P)
+void CowGearPrep<T>::basic_setup(Player& P, bool read_only)
 {
     Timer timer;
     timer.start();
-    assert(pairwise_machine == 0);
-    pairwise_machine = new PairwiseMachine(P);
-    auto& machine = *pairwise_machine;
-    auto& setup = machine.setup<FD>();
+    assert(machine == 0);
+    machine = new PairwiseMachine(P);
+    auto& setup = machine->setup<FD>();
     int lowgear_security = OnlineOptions::singleton.security_parameter;
 #ifdef VERBOSE
     auto& options = CowGearOptions::singleton;
@@ -46,7 +48,8 @@ void CowGearPrep<T>::basic_setup(Player& P)
                 << options.covert_security << endl;
     cerr << "LowGear security parameter: " << lowgear_security << endl;
 #endif
-    secure_init(setup, P, machine, typename T::clear(), lowgear_security);
+    secure_init(setup, P, *machine, typename T::clear(), lowgear_security,
+            read_only);
     T::clear::template init<typename FD::T>();
 #ifdef VERBOSE
     cerr << T::type_string() << " parameter setup took " << timer.elapsed()
@@ -55,36 +58,25 @@ void CowGearPrep<T>::basic_setup(Player& P)
 }
 
 template<class T>
-void CowGearPrep<T>::setup(Player& P, mac_key_type alphai)
+void CowGearPrep<T>::setup(Player& P)
 {
     basic_setup(P);
-    key_setup(P, alphai);
+    key_setup(P);
 }
 
 template<class T>
-void CowGearPrep<T>::key_setup(Player& P, mac_key_type alphai)
+void CowGearPrep<T>::key_setup(Player& P, bool read_only)
 {
     CODE_LOCATION
     Timer timer;
     timer.start();
-    auto& machine = *pairwise_machine;
+    auto& machine = *CowGearPrep<T>::machine;
     auto& setup = machine.setup<FD>();
     auto& options = CowGearOptions::singleton;
+    if (maybe_mac_key != 0)
+        setup.alphai = maybe_mac_key;
     read_or_generate_secrets(setup, P, machine,
-            options.covert_security, T::covert);
-
-    // adjust mac key
-    mac_key_type diff = alphai - setup.alphai;
-    setup.set_alphai(alphai);
-    Bundle<octetStream> bundle(P);
-    diff.pack(bundle.mine);
-    P.unchecked_broadcast(bundle);
-    for (int i = 0; i < P.num_players(); i++)
-    {
-        Plaintext_<FD> mess(setup.FieldD);
-        mess.assign_constant(bundle[i].get<mac_key_type>(), Polynomial);
-        machine.enc_alphas[i] += mess;
-    }
+            options.covert_security, T::covert, T(), read_only);
 
     // generate minimal number of items
     machine.nTriplesPerThread = 1;
@@ -95,23 +87,96 @@ void CowGearPrep<T>::key_setup(Player& P, mac_key_type alphai)
 }
 
 template<class T>
+string CowGearPrep<T>::get_full_secrets_filename(const Player& P)
+{
+    assert(machine);
+    return full_secrets_filename(machine->setup<FD>(), *machine, P,
+            CowGearOptions::singleton.covert_security, T::covert);
+}
+
+template<class T>
+void CowGearPrep<T>::adjust_mac_key(Player& P)
+{
+    assert(machine);
+    auto& setup = machine->setup<FD>();
+    mac_key_type diff = maybe_mac_key - setup.alphai;
+    if (diff == 0 or maybe_mac_key == 0)
+        return;
+
+    setup.set_alphai(maybe_mac_key);
+    Bundle<octetStream> bundle(P);
+    diff.pack(bundle.mine);
+    P.unchecked_broadcast(bundle);
+    for (int i = 0; i < P.num_players(); i++)
+    {
+        Plaintext_<FD> mess(setup.FieldD);
+        mess.assign_constant(bundle[i].get<mac_key_type>(), Polynomial);
+        machine->enc_alphas[i] += mess;
+    }
+}
+
+template<class T>
+typename CowGearPrep<T>::mac_key_type CowGearPrep<T>::get_mac_key(Player& P, bool read_only)
+{
+    return ::get_mac_key<CowGearPrep<T>>(P, read_only);
+}
+
+template<class T>
+typename T::mac_key_type get_mac_key(Player& P, bool read_only)
+{
+    try
+    {
+        if (T::machine == 0)
+            T::basic_setup(P, read_only);
+
+        auto& mac_key = T::machine->template get_setup<typename T::FD>().alphai;
+        if (mac_key == 0)
+        {
+            if (T::maybe_mac_key != 0)
+                mac_key = T::maybe_mac_key;
+            T::key_setup(P, read_only);
+        }
+        return mac_key;
+    }
+    catch (exception& e)
+    {
+        if (read_only)
+        {
+            if (T::machine)
+            {
+                delete T::machine;
+                T::machine = 0;
+            }
+
+            SeededPRNG G;
+            T::maybe_mac_key.randomize(G);
+            T::share_type::set_mac_key(T::maybe_mac_key);
+            return T::maybe_mac_key;
+        }
+        else
+            throw e;
+    }
+}
+
+template<class T>
 PairwiseGenerator<typename T::clear::FD>& CowGearPrep<T>::get_generator()
 {
     auto& proc = this->proc;
     assert(proc != 0);
     lock.lock();
-    if (pairwise_machine == 0 or pairwise_machine->enc_alphas.empty())
+    if (this->machine == 0 or this->machine->enc_alphas.empty())
     {
         PlainPlayer P(proc->P.N, "CowGear" + T::type_string());
-        if (pairwise_machine == 0)
-            setup(P, proc->MC.get_alphai());
+        if (this->machine == 0)
+            setup(P);
         else
-            key_setup(P, proc->MC.get_alphai());
+            key_setup(P);
+        BaseMachine::add_one_off(P.total_comm());
     }
     lock.unlock();
     if (pairwise_generator == 0)
     {
-        auto& machine = *pairwise_machine;
+        auto& machine = *this->machine;
         typedef typename T::open_type::FD FD;
         pairwise_generator = new PairwiseGenerator<FD>(0, machine, &proc->P);
     }

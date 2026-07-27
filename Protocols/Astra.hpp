@@ -88,7 +88,17 @@ AstraPrepProtocol<T>::~AstraPrepProtocol()
 template<class T>
 void AstraOnlineBase<T>::init_prep()
 {
-    open_with_check(prep, this->get_filename(false));
+    try
+    {
+        open_with_check(prep, this->get_filename(false));
+    }
+    catch (...)
+    {
+        throw runtime_error(
+                "Error with preprocessing in " + this->get_filename(false)
+                        + ". You need to run the preprocessing before "
+                        "the online phase or in parallel.");
+    }
 }
 
 template<class T>
@@ -435,7 +445,17 @@ void AstraPrepProtocol<T>::sync(vector<U>& values, Player& P)
     if (P.my_num() == 1)
     {
         if (not outputs.is_open())
-            open_with_check(outputs, this->get_output_filename());
+        {
+            try
+            {
+                open_with_check(outputs, this->get_output_filename());
+            }
+            catch (...)
+            {
+                throw runtime_error("Error with output back channel. "
+                        "This only works when preprocessing is run in parallel.");
+            }
+        }
 
         Timer timer;
         TimeScope ts(timer);
@@ -576,7 +596,7 @@ void AstraPrepProtocol<T>::randoms_inst(StackedVector<T>& S,
 
 template<class T>
 template<int>
-void AstraOnlineBase<T>::trunc_pr(const vector<int>& regs, int size,
+void AstraOnlineBase<T>::trunc_pr(const ArgVector& regs, int size,
         SubProcessor<T>& proc, false_type)
 {
     TruncPrTupleList<T> infos(regs, proc.get_S(), size);
@@ -589,7 +609,7 @@ void AstraOnlineBase<T>::trunc_pr(const vector<int>& regs, int size,
 
 template<class T>
 template<int>
-void AstraPrepProtocol<T>::trunc_pr(const vector<int>& regs, int size,
+void AstraPrepProtocol<T>::trunc_pr(const ArgVector& regs, int size,
         SubProcessor<T>& proc, false_type)
 {
     TruncPrTupleList<T> infos(regs, proc.get_S(), size);

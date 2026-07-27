@@ -11,6 +11,7 @@
 using namespace std;
 
 #include "OnlineOptions.h"
+#include "BaseMachine.h"
 #include "GC/ArgTuples.h"
 
 template<class T> class StackedVector;
@@ -53,12 +54,12 @@ public:
     int m;
     int n_shift;
 
-    TruncPrTuple(const vector<int>& regs, size_t base) :
+    TruncPrTuple(const ArgVector& regs, size_t base) :
             TruncPrTuple(regs.begin() + base)
     {
     }
 
-    TruncPrTuple(vector<int>::const_iterator it)
+    TruncPrTuple(ArgVector::const_iterator it)
     {
         dest_base = *it++;
         source_base = *it++;
@@ -98,17 +99,20 @@ class TruncPrTupleWithGap : public TruncPrTuple<T>
     bool big_gap_;
 
 public:
-    TruncPrTupleWithGap(const vector<int>& regs, size_t base) :
+    TruncPrTupleWithGap(const ArgVector& regs, size_t base) :
             TruncPrTupleWithGap<T>(regs.begin() + base)
     {
     }
 
-    TruncPrTupleWithGap(vector<int>::const_iterator it) :
+    TruncPrTupleWithGap(ArgVector::const_iterator it) :
             TruncPrTuple<T>(it)
     {
-        big_gap_ = this->k <= T::n_bits() - OnlineOptions::singleton.trunc_error;
+        int min_size = this->k + OnlineOptions::singleton.trunc_error;
+        big_gap_ = min_size <= T::n_bits();
         if (T::prime_field and small_gap())
             throw runtime_error("domain too small for chosen truncation error");
+        if (small_gap() and BaseMachine::has_singleton())
+            BaseMachine::s().gap_warning(min_size);
     }
 
     T upper(T mask)
@@ -164,7 +168,7 @@ class TruncPrTupleList : public vector<TruncPrTupleWithRange<T>>
     typedef TruncPrTupleList This;
 
 public:
-    TruncPrTupleList(const vector<int>& args, StackedVector<T>& S, size_t size)
+    TruncPrTupleList(const ArgVector& args, StackedVector<T>& S, size_t size)
     {
         ArgList<TruncPrTupleWithGap<typename T::open_type>> tmp(args);
         for (auto x : tmp)

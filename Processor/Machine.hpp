@@ -55,6 +55,7 @@ template<class sint, class sgf2n>
 Machine<sint, sgf2n>::Machine(Names& playerNames, bool use_encryption,
     const OnlineOptions opts)
   : my_number(playerNames.my_num()), N(playerNames),
+    max_trunc_size(0),
     use_encryption(use_encryption), live_prep(opts.live_prep), opts(opts),
     external_clients(my_number)
 {
@@ -105,28 +106,32 @@ Machine<sint, sgf2n>::Machine(Names& playerNames, bool use_encryption,
   sint::bit_type::MAC_Check::setup(*P);
   sgf2n::MAC_Check::setup(*P);
 
+  // for OT-based preprocessing
+  sint::clear::next::template init<typename sint::clear>(false);
+
   if (opts.live_prep)
-    alphapi = read_generate_write_mac_key<sint>(*P);
+    {
+      alphapi = sint::LivePrep::get_mac_key(*P);
+      alpha2i = sgf2n::LivePrep::get_mac_key(*P, true);
+      alphabi = sint::bit_type::LivePrep::get_mac_key(*P);
+    }
   else
     {
       // check for directory
       Sub_Data_Files<sint>::check_setup(N);
-      // require existing MAC key
+      // require existing MAC keys
       if (sint::has_mac)
-        read_mac_key<sint>(N, alphapi);
+        maybe_read_mac_key<sint>(N, alphapi);
+      if (sgf2n::has_mac)
+        maybe_read_mac_key<sgf2n>(N, alpha2i);
+      if (sint::bit_type::part_type::has_mac)
+        maybe_read_mac_key<typename sint::bit_type::part_type>(N, alphabi);
     }
-
-  alpha2i = read_generate_write_mac_key<sgf2n>(*P);
-  alphabi = read_generate_write_mac_key<typename
-      sint::bit_type::part_type>(*P);
 
 #ifdef DEBUG_MAC
   cerr << "MAC Key p = " << alphapi << endl;
   cerr << "MAC Key 2 = " << alpha2i << endl;
 #endif
-
-  // for OT-based preprocessing
-  sint::clear::next::template init<typename sint::clear>(false);
 
   // Initialize the global memory
   auto memtype = opts.memtype;
@@ -158,6 +163,10 @@ void Machine<sint, sgf2n>::prepare(const string& progname_str)
   int old_n_threads = nthreads;
   progs.clear();
   load_schedule(progname_str);
+
+  if (opts.verbose)
+    suggest_optimizations();
+
   check_program();
 
   // keep preprocessing
@@ -170,6 +179,7 @@ void Machine<sint, sgf2n>::prepare(const string& progname_str)
         {
           Binary_File_IO<sint>::reset(my_number);
           Binary_File_IO<sgf2n>::reset(my_number);
+          Binary_File_IO<typename sint::clear>::reset(my_number);
           break;
         }
     }
@@ -202,15 +212,12 @@ void Machine<sint, sgf2n>::prepare(const string& progname_str)
         threads.push_back(thread);
       else
         throw runtime_error("cannot start thread");
+
+      // cannot start threads in parallel
+      queues[i]->result();
     }
 
   assert(queues.size() == threads.size());
-
-  // synchronize with clients before starting timer
-  for (int i=old_n_threads; i<nthreads; i++)
-    {
-      queues[i]->result();
-    }
 }
 
 template<class sint, class sgf2n>
@@ -243,7 +250,7 @@ size_t Machine<sint, sgf2n>::load_program(const string& threadname,
 }
 
 template<class sint, class sgf2n>
-DataPositions Machine<sint, sgf2n>::run_tapes(const vector<int>& args,
+DataPositions Machine<sint, sgf2n>::run_tapes(const ArgVector& args,
     Data_Files<sint, sgf2n>& DataF)
 {
   assert(args.size() % 3 == 0);
@@ -524,7 +531,9 @@ pair<DataPositions, NamedCommStats> Machine<sint, sgf2n>::stop_threads()
       pthread_join(threads[i],NULL);
     }
 
-  auto comm_stats = total_comm();
+  auto stats = total_stats();
+  comm_stats = stats.comm_stats;
+  this->stats = stats.exe_stats;
   max_comm = queues.max_comm();
 
   if (OnlineOptions::singleton.verbose)
@@ -607,6 +616,12 @@ void Machine<sint, sgf2n>::run(const string& progname)
       if (multithread)
         cerr << " (overall core time)";
       cerr << endl;
+      auto& P = *this->P;
+      auto one_off = TreeSum<Z2<64>>().run(
+          this->one_off_comm.sent, P).get_limb(0);
+      if (one_off)
+        cerr << "One-off global communication: " << one_off * 1e-6 << " MB"
+            << endl;
     }
 
   print_timers();
@@ -637,7 +652,9 @@ void Machine<sint, sgf2n>::run(const string& progname)
         Mp.resize_s(max_size);
     }
 
-  if (sint::real_shares(*P) and not opts.has_option("no_memory_output"))
+  if (sint::real_shares(*P) and not opts.has_option("no_memory_output")
+      and (OnlineOptions::singleton.disk_memory.empty()
+          or opts.has_option("memory_output")))
     {
       RunningTimer timer;
       // Write out the memory to use next time
@@ -663,7 +680,7 @@ void Machine<sint, sgf2n>::run(const string& progname)
       and not progs[0].usage_unknown())
     throw runtime_error("computation used more preprocessing than expected");
 
-  if (not stats.empty())
+  if (not stats.empty() and opts.verbose)
     {
       stats.print();
     }
@@ -685,13 +702,24 @@ void Machine<sint, sgf2n>::run(const string& progname)
             << "have you considered using " << alt << " instead?" << endl;
     }
 
-  if (nan_warning and sint::real_shares(*P))
+  if ((nan_warning or mini_warning) and sint::real_shares(*P))
     {
-      cerr << "Outputs of 'NaN' might be related to exceeding the sfix range. See ";
-      cerr << "https://mp-spdz.readthedocs.io/en/latest/Compiler.html#Compiler.types.sfix";
+      if (nan_warning)
+        cerr << "Outputs of 'NaN' might be related to exceeding the sfix range. ";
+      if (mini_warning)
+        cerr << pow(2, mini_warning) << " is the smallest non-zero number "
+            << "in a used fixed-point representation. ";
+      cerr << "See https://mp-spdz.readthedocs.io/en/latest/Compiler.html#Compiler.types.sfix";
       cerr << " for details" << endl;
       nan_warning = false;
+      mini_warning = 0;
     }
+
+#ifdef INSECURE
+  if (not opts.live_prep)
+    cerr << "WARNING: Preprocessing data in files left untouched. "
+        << "Next run will use the same randomness." << endl;
+#endif
 
 #ifdef VERBOSE
   cerr << "End of prog" << endl;
@@ -743,6 +771,10 @@ void Machine<sint, sgf2n>::suggest_optimizations()
     cerr << "This program might benefit from some protocol options." << endl
         << "Consider adding the following at the beginning of your code:"
         << endl << optimizations;
+  if (sint::clear::n_bits() < max_trunc_size)
+    cerr << "The computation domain is too small "
+        << "for low-round truncation; it would need to have at least "
+        << max_trunc_size << " bits." << endl;
 #ifndef __clang__
   cerr << "This virtual machine was compiled with GCC. Recompile with "
       "'CXX = clang++' in 'CONFIG.mine' for optimal performance." << endl;
@@ -766,6 +798,17 @@ void Machine<sint, sgf2n>::check_program()
   {
     throw runtime_error("program differs between parties");
   }
+}
+
+template<class sint, class sgf2n>
+void Machine<sint, sgf2n>::gap_warning(int k)
+{
+  if (k > max_trunc_size)
+    {
+      warn_lock.lock();
+      max_trunc_size = max(k, max_trunc_size);
+      warn_lock.unlock();
+    }
 }
 
 #endif

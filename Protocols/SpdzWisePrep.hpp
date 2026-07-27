@@ -18,6 +18,14 @@
 #include "GC/RepPrep.hpp"
 
 template<class T>
+typename T::mac_key_type SpdzWisePrep<T>::get_mac_key(Player& P, bool)
+{
+    if (T::get_mac_key() == 0)
+        read_generate_write_mac_key<T>(P);
+    return T::get_mac_key();
+}
+
+template<class T>
 void SpdzWisePrep<T>::buffer_triples()
 {
     assert(this->protocol != 0);
@@ -25,6 +33,15 @@ void SpdzWisePrep<T>::buffer_triples()
     this->protocol->init_mul();
     generate_triples_initialized(this->triples,
             BaseMachine::batch_size<T>(DATA_TRIPLE, this->buffer_size),
+            this->protocol);
+}
+
+template<class T>
+void SpdzWisePrep<T>::buffer_squares()
+{
+    assert(this->protocol != 0);
+    generate_squares(this->squares,
+            BaseMachine::batch_size<T>(DATA_SQUARE, this->buffer_size),
             this->protocol);
 }
 

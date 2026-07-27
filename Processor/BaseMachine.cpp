@@ -13,6 +13,7 @@
 
 #include <iostream>
 #include <sodium.h>
+#include <regex>
 using namespace std;
 
 BaseMachine* BaseMachine::singleton = 0;
@@ -66,15 +67,20 @@ int BaseMachine::triple_bucket_size(DataFieldType type)
 int BaseMachine::bucket_size(size_t usage)
 {
   int res = OnlineOptions::singleton.bucket_size;
+  int min = res;
 
   if (usage)
     {
-      for (int B = res; B <= 5; B++)
-        if (ShuffleSacrifice(B).minimum_n_outputs() < usage * .9)
+      res = 5;
+      for (int B = res; B >= min; B--)
+        if (ShuffleSacrifice(B).minimum_n_outputs() > usage * 1.1)
           break;
         else
           res = B;
     }
+
+  if (OnlineOptions::singleton.has_option("debug_batch_size"))
+    fprintf(stderr, "bucket_size=%d usage=%zu\n", res, usage);
 
   return res;
 }
@@ -103,8 +109,13 @@ int BaseMachine::matrix_requirement(int n_rows, int n_inner, int n_cols)
     return -1;
 }
 
+bool BaseMachine::allow_mulm()
+{
+  return singleton and singleton->relevant_opts.find("no_mulm") != string::npos;
+}
+
 BaseMachine::BaseMachine() :
-    nthreads(0), multithread(false), nan_warning(0)
+    nthreads(0), multithread(false), nan_warning(0), mini_warning(0)
 {
   if (sodium_init() == -1)
     throw runtime_error("couldn't initialize libsodium");
@@ -182,6 +193,7 @@ void BaseMachine::load_schedule(const string& progname, bool load_bytecode)
   getline(inpf, relevant_opts);
   getline(inpf, security);
   getline(inpf, gf2n);
+  getline(inpf, expected_communication);
   inpf.close();
 }
 
@@ -209,12 +221,12 @@ void BaseMachine::start(int n)
   cout << "Starting timer " << n << " at " << timer[n].elapsed()
     << " (" << timer[n] << ")"
     << " after " << timer[n].idle() << endl;
-  timer[n].start(total_comm());
+  timer[n].start(total_stats());
 }
 
 void BaseMachine::stop(int n)
 {
-  timer[n].stop(total_comm());
+  timer[n].stop(total_stats());
   cout << "Stopped timer " << n << " at " << timer[n].elapsed() << " ("
       << timer[n] << ")" << endl;
 }
@@ -228,10 +240,15 @@ void BaseMachine::print_timers()
     cerr << "ex";
   cerr << "cluding preprocessing (offline phase)." << endl;
   cerr << "Time = " << timer[0].elapsed() << " seconds " << endl;
-  timer.erase(0);
   for (auto it = timer.begin(); it != timer.end(); it++)
-    cerr << "Time" << it->first << " = " << it->second.elapsed() << " seconds ("
-        << it->second << ")" << endl;
+    if (it->first)
+      {
+        cerr << "Time" << it->first << " = " << it->second.elapsed()
+            << " seconds (" << it->second << ")" << endl;
+        if (not it->second.exe_stats().empty()
+            and OnlineOptions::singleton.has_option("part_exe"))
+          it->second.exe_stats().print();
+      }
 }
 
 string BaseMachine::memory_filename(const string& type_short, int my_number)
@@ -303,16 +320,24 @@ int BaseMachine::security_from_schedule(string progname)
     return 0;
 }
 
-NamedCommStats BaseMachine::total_comm()
+ThreadQueues* BaseMachine::maybe_get_queues()
 {
-  return queues.total_comm();
+  if (singleton and thread_num == 0)
+    return &s().queues;
+  else
+    return 0;
 }
 
-void BaseMachine::set_thread_comm(const NamedCommStats& stats)
+ThreadStats BaseMachine::total_stats()
+{
+  return queues.total_stats();
+}
+
+void BaseMachine::set_thread_stats(const ThreadStats& stats)
 {
   auto queue = queues.at(BaseMachine::thread_num);
   assert(queue);
-  queue->set_comm_stats(stats);
+  queue->set_stats(stats);
 }
 
 void BaseMachine::print_global_comm(Player& P, const NamedCommStats& stats)
@@ -320,17 +345,61 @@ void BaseMachine::print_global_comm(Player& P, const NamedCommStats& stats)
   Bundle<octetStream> bundle(P);
   bundle.mine.store(stats.sent);
   P.Broadcast_Receive_no_stats(bundle);
-  size_t global = 0;
+  long long global = 0;
   for (auto& os : bundle)
     global += os.get_int(8);
   cerr << "Global data sent = " << global / 1e6 << " MB (all parties)" << endl;
+
+  double total_time;
+  if (multithread)
+    total_time = max_comm.total_time();
+  else
+    total_time = comm_stats.total_time();
+  if (total_time > .95 * timer[0].elapsed())
+    cerr
+        << "Communication time accounts for more than 95 percent of total time ("
+        << total_time << " seconds). "
+        << "This might be because of the computation and the network setting, "
+        << "but it could also be product of the optimization trade-off during compilation. "
+        << "See https://mp-spdz.readthedocs.io/en/latest/troubleshooting.html#high-number-of-rounds-or-slow-wan-execution"
+        << endl;
+
+  smatch what;
+  regex comm_regexp("online:([0-9]*) offline:([0-9]*) n_parties:([0-9]*)");
+  if (regex_search(expected_communication, what, comm_regexp))
+    {
+      long long expected = stoll(what[1]) + stoll(what[2]);
+      int n_parties = stoi(what[3]);
+      if (expected and n_parties != P.num_players())
+        {
+          cerr << "Wrong number of parties in compiler's expectation: "
+              << n_parties << endl;
+        }
+      else if (expected)
+        {
+          double over = round(100. * (global - expected) / expected);
+          if (over >= 5)
+            cerr
+                << "Actual communication exceeds the compiler's expectation by "
+                << over << " percent." << endl;
+          if (over < 0)
+            {
+              if (OnlineOptions::singleton.has_option("overestimate"))
+                cerr << "Actual communication is below the compiler's "
+                "expectation by " << -over << " percent." << endl;
+              else
+                cerr << "The compiler overestimated the communication." << endl;
+            }
+        }
+    }
 }
 
 void BaseMachine::print_comm(Player& P, const NamedCommStats& comm_stats)
 {
   size_t rounds = 0;
   for (auto& x : comm_stats)
-    rounds += x.second.rounds;
+    if (x.first.find("transmission") == string::npos)
+      rounds += x.second.rounds;
   cerr << "Data sent = " << comm_stats.sent / 1e6 << " MB in ~" << rounds
       << " rounds (party " << P.my_num() << " only";
   if (multithread)
@@ -340,4 +409,10 @@ void BaseMachine::print_comm(Player& P, const NamedCommStats& comm_stats)
   cerr << ")" << endl;
 
   print_global_comm(P, comm_stats);
+}
+
+void BaseMachine::add_one_off(const NamedCommStats& comm)
+{
+  if (has_singleton())
+    s().one_off_comm += comm;
 }

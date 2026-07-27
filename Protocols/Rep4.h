@@ -39,6 +39,8 @@ class Rep4 : public ProtocolBase<T>
 
     int my_num;
 
+    bool malicious;
+
     array<open_type, 5> get_addshares(const T& x, const T& y);
 
     void reset_joint_input(int n_inputs);
@@ -59,6 +61,9 @@ class Rep4 : public ProtocolBase<T>
     T finalize_mul(int n_bits, false_type);
 
     void must_check();
+
+    void append_hashes(octetStreams& to_send);
+    void check_hashes(octetStreams& to_receive);
 
 public:
     static const bool uses_triples = false;
@@ -87,17 +92,18 @@ public:
     void randoms(T& res, int n_bits);
 
     template<int = 0>
-    void trunc_pr(const vector<int>& regs, int size, SubProcessor<T>& proc,
+    void trunc_pr(const ArgVector& regs, int size, SubProcessor<T>& proc,
             true_type);
     template<int = 0>
-    void trunc_pr(const vector<int>& regs, int size, SubProcessor<T>& proc,
+    void trunc_pr(const ArgVector& regs, int size, SubProcessor<T>& proc,
             false_type);
 
     template<class U>
-    void split(StackedVector<T>& dest, const vector<int>& regs, int n_bits,
+    void split(StackedVector<T>& dest, const ArgVector& regs, int n_bits,
             const U* source, int n_inputs);
 
     int get_n_relevant_players() { return 2; }
 };
+
 
 #endif /* PROTOCOLS_REP4_H_ */

@@ -61,7 +61,7 @@ public:
             const vector<octetStream>& to_send,
             vector<octetStream>& to_receive) const;
 
-    void partial_broadcast(const vector<bool>& my_senders,
+    void partial_broadcast_no_stats(const vector<bool>& my_senders,
             const vector<bool>& my_receivers, vector<octetStream>& os) const;
 
     void Broadcast_Receive_no_stats(vector<octetStream>& os) const;

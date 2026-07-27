@@ -21,6 +21,7 @@ class ShareThread
 
 public:
     static ShareThread& s();
+    static bool has_singleton();
 
     Player* P;
     typename T::MC* MC;
@@ -40,9 +41,9 @@ public:
     void post_run();
     void check();
 
-    void and_(Processor<T>& processor, const vector<int>& args, bool repeat);
-    void andrsvec(Processor<T>& processor, const vector<int>& args);
-    void xors(Processor<T>& processor, const vector<int>& args);
+    void and_(Processor<T>& processor, const ArgVector& args, bool repeat);
+    void andrsvec(Processor<T>& processor, const ArgVector& args);
+    void xors(Processor<T>& processor, const ArgVector& args);
 };
 
 template<class T>
@@ -56,6 +57,9 @@ public:
 
     void pre_run();
     void post_run() { ShareThread<T>::post_run(); }
+
+    TimerWithComm prep_time()
+    { return this->DataF.total_time(); }
 };
 
 template<class T>
@@ -67,7 +71,13 @@ inline ShareThread<T>& ShareThread<T>::s()
     if (singleton and T::is_real)
         return *singleton;
     else
-        throw runtime_error("no ShareThread singleton");
+        throw no_singleton("no ShareThread singleton");
+}
+
+template<class T>
+bool GC::ShareThread<T>::has_singleton()
+{
+    return singleton;
 }
 
 } /* namespace GC */

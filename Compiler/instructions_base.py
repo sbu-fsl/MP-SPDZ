@@ -6,6 +6,7 @@ import functools
 import copy
 import sys
 import struct
+import operator
 from Compiler.exceptions import *
 from Compiler.config import *
 from Compiler import util
@@ -213,6 +214,8 @@ opcodes = dict(
     PRINTFLOATPLAIN = 0xBC,
     WRITEFILESHARE = 0xBD,     
     READFILESHARE = 0xBE,
+    WRITEFILECLEAR = 0xC3,
+    READFILECLEAR = 0xC4,
     CONDPRINTSTR = 0xBF,
     PRINTFLOATPREC = 0xE0,
     CONDPRINTPLAIN = 0xE1,
@@ -443,6 +446,7 @@ def cisc(function, n_outputs=1):
     class MergeCISC(Mergeable):
         instructions = {}
         functions = {}
+        read_after_write = True
 
         def __init__(self, *args, **kwargs):
             self.args = args
@@ -481,6 +485,9 @@ def cisc(function, n_outputs=1):
 
         def get_size(self):
             return self.args[0].vector_size()
+
+        def get_repeat(self):
+            pass
 
         def new_instructions(self, size, regs):
             if self.merge_id() not in self.instructions:
@@ -619,6 +626,8 @@ def cisc(function, n_outputs=1):
                                not issubclass(type(self.calls[0][0][0]),
                                               type(arg)):
                                 good = False
+                    if not call[1].get('signed', True):
+                        good = False
                 if good:
                     return program.curr_block.instructions.append(self)
             if program.verbose:
@@ -627,14 +636,12 @@ def cisc(function, n_outputs=1):
             tape.start_new_basicblock(name='pre-' + self.name())
             size = sum(call[0][0].vector_size() for call in self.calls)
             new_regs = []
-            for i, arg in enumerate(self.args):
+            for i, arg in enumerate(self.args[n_outputs:]):
+                i += n_outputs
                 try:
-                    if i < n_outputs:
-                        new_regs.append(arg.new_vector(size=size))
-                    else:
-                        new_regs.append(type(arg).concat(
-                            call[0][i] for call in self.calls))
-                        assert new_regs[-1].vector_size() == size
+                    new_regs.append(type(arg).concat(
+                        call[0][i] for call in self.calls))
+                    assert new_regs[-1].vector_size() == size
                 except (TypeError, AttributeError):
                     if not isinstance(arg, (int, type(None))):
                         raise
@@ -642,6 +649,35 @@ def cisc(function, n_outputs=1):
                 except:
                     print([call[0][0].vector_size() for call in self.calls])
                     raise
+            budget = program.memory_budget
+            if size <= budget:
+                new_regs = self.expand_chunk(size, new_regs)
+            else:
+                all_outputs = []
+                for base in range(0, size, budget):
+                    chunk_size = min(budget, size - base)
+                    chunk_regs = []
+                    for arg in new_regs:
+                        if isinstance(arg, (int, type(None))):
+                            chunk_regs.append(None)
+                        else:
+                            chunk_regs.append(
+                                arg.get_vector(base=base, size=chunk_size))
+                    outputs = self.expand_chunk(chunk_size, chunk_regs)
+                    all_outputs.append(outputs)
+                new_regs = [output[0].concat(output) for output in zip(*all_outputs)]
+            base = 0
+            for call in self.calls:
+                for i in range(n_outputs):
+                    reg = call[0][i]
+                    reg.copy_from_part(new_regs[i], base, reg.vector_size())
+                base += reg.vector_size()
+            tape.start_new_basicblock(name='post-' + self.name())
+
+        def expand_chunk(self, size, new_regs):
+            outputs = [arg.new_vector(size=size)
+                       for arg in self.args[:n_outputs]]
+            new_regs = outputs + new_regs
             if program.cisc_to_function and \
                (program.curr_tape.singular or program.n_running_threads):
                 if not program.use_tape_calls and not program.force_cisc_tape:
@@ -651,13 +687,7 @@ def cisc(function, n_outputs=1):
             else:
                 self.new_instructions(size, new_regs)
                 program.curr_block.n_rounds += self.n_rounds - 1
-            base = 0
-            for call in self.calls:
-                for i in range(n_outputs):
-                    reg = call[0][i]
-                    reg.copy_from_part(new_regs[i], base, reg.vector_size())
-                base += reg.vector_size()
-            tape.start_new_basicblock(name='post-' + self.name())
+            return outputs
 
         def add_usage(self, *args):
             pass
@@ -687,6 +717,9 @@ def cisc(function, n_outputs=1):
             except:
                 return int_to_bytes(arg)
 
+        def get_parts(self):
+            yield self
+
         def name(self):
             return self.function.__name__
 
@@ -703,7 +736,7 @@ def cisc(function, n_outputs=1):
                 same_sizes &= arg.size == args[0].size
             except:
                 pass
-        if program.use_cisc() and same_sizes:
+        if program.use_cisc() and same_sizes and not args[0] is None:
             return MergeCISC(*args, **kwargs)
         else:
             return function(*args, **kwargs)
@@ -717,7 +750,8 @@ def ret_cisc(function):
 
     def wrapper(*args, **kwargs):
         from Compiler import types
-        if not (program.options.cisc and isinstance(args[0], types._register)):
+        if not (program.options.cisc and isinstance(args[0], types._register)
+                and not kwargs.pop('maybe_mixed', None)):
             return function(*args, **kwargs)
         for arg in args:
             if isinstance(arg, types._secret):
@@ -985,6 +1019,7 @@ class Instruction(object):
     __slots__ = ['args', 'arg_format', 'code', 'caller']
     count = 0
     code_length = 10
+    read_after_write = False
 
     def __init__(self, *args, **kwargs):
         """ Create an instruction and append it to the program list. """
@@ -1008,6 +1043,13 @@ class Instruction(object):
                       "with @for_range_opt: "
                       "https://mp-spdz.readthedocs.io/en/latest/Compiler.html#"
                       "Compiler.library.for_range_opt")
+        if program.timeout and time.time() > program.timeout:
+            raise CompilerError(
+                "Compilation timeout reached. If you need more time for your "
+                "program, you can add 'program.unlimited_compilation()' at "
+                "the beginning. However, we would appreciate receiving the "
+                "backtrace above on GitHub to investigate potential "
+                "inefficencies.")
 
     def get_code(self, prefix=0):
         return (prefix << self.code_length) + self.code
@@ -1073,6 +1115,9 @@ class Instruction(object):
     def get_size(self):
         return 1
 
+    def get_repeat(self):
+        pass
+
     def add_usage(self, req_node):
         pass
 
@@ -1112,6 +1157,8 @@ class Instruction(object):
                     new_args.append(arg.copy())
                     subs[arg] = new_args[-1]
                 else:
+                    if isinstance(arg, program.curr_tape.Register) and arg.caller:
+                        print(util.format_trace(arg.caller), file=sys.stderr)
                     new_args.append(arg)
         return new_args
 
@@ -1122,6 +1169,19 @@ class Instruction(object):
     @staticmethod
     def get_usage(args):
         return {}
+
+    def get_parts(self):
+        if isinstance(self.arg_format, tools.cycle) and functools.reduce(
+                operator.and_, (isinstance(x, str)
+                                for x in self.arg_format.args[0])):
+            n = len(self.arg_format.args[0])
+            for i in range(0, len(self.args), n):
+                args = self.args[i:i + n]
+                inst = Instruction(*args, copying=True, add_to_prog=False)
+                inst.arg_format = self.arg_format
+                yield inst
+        else:
+            yield self
 
     # String version of instruction attempting to replicate encoded version
     def __str__(self):

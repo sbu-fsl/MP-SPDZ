@@ -295,6 +295,9 @@ PlayerBase::~PlayerBase()
 void PlainPlayer::setup_sockets(const vector<string>& names,
         const vector<int>& ports, const string& id_base, ServerSocket& server)
 {
+    if (OnlineOptions::singleton.has_option("debug_connection_id"))
+        cerr << "Setting up connection " << id_base << endl;
+
     sockets.resize(nplayers);
     // Set up the client side
     for (int i=0; i<=player_no; i++) {
@@ -367,10 +370,7 @@ long MultiPlayer<T>::receive_long(int i) const
 
 void Player::send_to(int player,const octetStream& o) const
 {
-#ifdef VERBOSE_COMM
-  cerr << "sending to " << player << endl;
-#endif
-  TimeScope ts(comm_stats["Sending directly"].add(o));
+  TimeScope ts(comm_stats["Sending directly"].add(o, player));
   send_to_no_stats(player, o);
   sent += o.get_length();
 }
@@ -405,12 +405,9 @@ void Player::receive_all(vector<octetStream>& os) const
 
 void Player::receive_player(int i,octetStream& o) const
 {
-#ifdef VERBOSE_COMM
-  cerr << "receiving from " << i << endl;
-#endif
   TimeScope ts(timer);
   receive_player_no_stats(i, o);
-  comm_stats["Receiving directly"].add(o, ts);
+  comm_stats["Receiving directly"].add(o, ts, i);
 }
 
 template<class T>
@@ -484,10 +481,7 @@ void MultiPlayer<T>::exchange_no_stats(int other, const octetStream& o, octetStr
 
 void Player::exchange(int other, const octetStream& o, octetStream& to_receive) const
 {
-#ifdef VERBOSE_COMM
-  cerr << "Exchanging with " << other << endl;
-#endif
-  TimeScope ts(comm_stats["Exchanging"].add(o));
+  TimeScope ts(comm_stats["Exchanging"].add(o, other));
   exchange_no_stats(other, o, to_receive);
   sent += o.get_length();
 }
@@ -524,15 +518,44 @@ void Player::pass_around(octetStream& o, octetStream& to_receive, int offset) co
 template<class T>
 void MultiPlayer<T>::Broadcast_Receive_no_stats(vector<octetStream>& o) const
 {
+  vector<bool> parties(num_players(), true);
+  partial_broadcast_no_stats(parties, parties, o);
+}
+
+
+template<class T>
+void MultiPlayer<T>::partial_broadcast_no_stats(
+    const vector<bool>& senders, const vector<bool>& receivers,
+    vector<octetStream>& o) const
+{
   if (o.size() != sockets.size())
     throw runtime_error("player numbers don't match");
 
   vector<Exchanger<T>> exchangers;
+  octetStream empty;
   for (int i=1; i<nplayers; i++)
     {
       int send_to = (my_num() + i) % num_players();
       int receive_from = (my_num() + num_players() - i) % num_players();
-      exchangers.push_back({sockets[send_to], o[my_num()], sockets[receive_from], o[receive_from]});
+
+      if (senders.at(send_to) and receivers.at(receive_from))
+        exchangers.push_back({sockets[send_to], o[my_num()],
+          sockets[receive_from], o[receive_from]});
+      else if (receivers.at(receive_from))
+        exchangers.push_back({0, empty,
+          sockets[receive_from], o[receive_from]});
+      else if (senders.at(send_to))
+        exchangers.push_back({sockets[send_to], o[my_num()],
+          0, o[receive_from]});
+
+      if (OnlineOptions::singleton.has_option("detailed_verbose_comm"))
+        {
+          if (senders.at(send_to))
+            cerr << "Send " << o[my_num()].get_length() << " bytes to "
+                << send_to << endl;
+          if (receivers.at(receive_from))
+            cerr << "Receiving from " << receive_from << endl;
+        }
     }
 
   int left = 1;
@@ -542,6 +565,10 @@ void MultiPlayer<T>::Broadcast_Receive_no_stats(vector<octetStream>& o) const
       for (auto& exchanger : exchangers)
         left += exchanger.round(false);
     }
+
+  for (int i = 0; i < num_players(); i++)
+    if (i != my_num() and not o.at(i).empty())
+      throw runtime_error("unexpected information from " + to_string(i));
 }
 
 void Player::unchecked_broadcast(vector<octetStream>& o) const
@@ -603,19 +630,19 @@ void Player::send_receive_all(const vector<vector<bool>>& channels,
     if (i != my_num() and channels.at(my_num()).at(i))
       {
         data += to_send.at(i).get_length();
-#ifdef VERBOSE_COMM
-        cerr << "Send " << to_send.at(i).get_length() << " to " << i << endl;
-#endif
+        if (OnlineOptions::singleton.has_option("detailed_verbose_comm"))
+          cerr << "Send " << to_send.at(i).get_length() << " bytes to " << i << endl;
       }
   TimeScope ts(comm_stats["Sending/receiving"].add(data));
   sent += data;
   send_receive_all_no_stats(channels, to_send, to_receive);
 }
 
-void Player::partial_broadcast(const vector<bool>&,
-    const vector<bool>&, vector<octetStream>& os) const
+void Player::partial_broadcast(const vector<bool>& senders,
+    const vector<bool>& receivers, vector<octetStream>& os) const
 {
-  unchecked_broadcast(os);
+  TimeScope ts(comm_stats["Partial broadcasting"].add(os[my_num()]));
+  partial_broadcast_no_stats(senders, receivers, os);
 }
 
 template<class T>
@@ -872,6 +899,14 @@ Timer& NamedCommStats::add_to_last_round(const string& name, size_t length)
     }
 }
 
+double NamedCommStats::total_time() const
+{
+  double res = 0;
+  for (auto& x : *this)
+    res += x.second.timer.elapsed();
+  return res;
+}
+
 Timer& CommStatsWithName::add_length_only(size_t length)
 {
   if (OnlineOptions::singleton.has_option("verbose_comm"))
@@ -879,15 +914,22 @@ Timer& CommStatsWithName::add_length_only(size_t length)
   return stats.add_length_only(length);
 }
 
-Timer& CommStatsWithName::add(const octetStream& os)
+Timer& CommStatsWithName::add(const octetStream& os, int player)
 {
-  return add(os.get_length());
+  return add(os.get_length(), player);
 }
 
-Timer& CommStatsWithName::add(size_t length)
+Timer& CommStatsWithName::add(size_t length, int player)
 {
   if (OnlineOptions::singleton.has_option("verbose_comm"))
-    fprintf(stderr, "%s %zu bytes\n", name.c_str(), length);
+    {
+      if (player < 0)
+        fprintf(stderr, "%s %zu bytes\n", name.c_str(), length);
+      else
+        fprintf(stderr, "%s %zu bytes with party %d\n", name.c_str(), length,
+            player);
+    }
+
   return stats.add(length);
 }
 

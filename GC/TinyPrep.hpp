@@ -16,11 +16,10 @@ template<class T>
 void TinierSharePrep<T>::init_real(Player& P)
 {
     assert(real_triple_generator == 0);
-    auto& thread = ShareThread<secret_type>::s();
     real_triple_generator = new typename T::whole_type::TripleGenerator(
             BaseMachine::fresh_ot_setup(P), P.N, -1,
             OnlineOptions::singleton.batch_size, 1, params,
-            thread.MC->get_alphai(), &P);
+            &P);
     real_triple_generator->multi_threaded = false;
 }
 
@@ -33,7 +32,7 @@ void TinierSharePrep<T>::buffer_secret_triples()
     assert(triple_generator != 0);
     params.generateBits = false;
     vector<array<T, 3>> triples;
-    TripleShuffleSacrifice<T> sacrifice(DATA_GF2);
+    TripleShuffleSacrifice<T> sacrifice;
     size_t required;
     required = sacrifice.minimum_n_inputs_with_combining(
             BaseMachine::batch_size<T>(DATA_TRIPLE));

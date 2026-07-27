@@ -36,8 +36,8 @@ template<class T> void generate_prime_setup(string, int, int);
 #define GFP_MOD_SZ 2
 #endif
 
-#if GFP_MOD_SZ > MAX_MOD_SZ
-#error GFP_MOD_SZ must be at most MAX_MOD_SZ
+#if 2 * GFP_MOD_SZ > MAX_MOD_SZ
+#error 2 * GFP_MOD_SZ must be at most MAX_MOD_SZ
 #endif
 
 /**
@@ -105,9 +105,9 @@ class gfp_ : public ValueInterface
   static void write_setup(int nplayers)
     { write_setup(get_prep_sub_dir<T>(nplayers)); }
   static void write_setup(string dir)
-    { write_online_setup(dir, pr()); }
+    { ZpD.write_setup(dir); }
   static void check_setup(string dir);
-  static string fake_opts() { return " -P " + to_string(pr()); }
+  static string fake_opts() { return ZpD.fake_opts(); }
 
   /**
    * Get the prime modulus
@@ -136,6 +136,7 @@ class gfp_ : public ValueInterface
 
   static const true_type invertible;
   static const true_type prime_field;
+  static const true_type optimized_packing;
 
   static gfp_ Mul(gfp_ a, gfp_ b) { return a * b; }
 
@@ -291,6 +292,9 @@ class gfp_ : public ValueInterface
    */
   void pack(octetStream& o, int n = -1) const
     { (void) n; a.pack(o); }
+  template<int LL>
+  void pack(octetStream& o) const
+    { a.template pack<LL>(o); }
   /**
    * Read from buffer in native format
    * @param o buffer
@@ -298,6 +302,9 @@ class gfp_ : public ValueInterface
    */
   void unpack(octetStream& o, int n = -1)
     { (void) n; a.unpack(o); }
+  template<int LL>
+  void unpack(octetStream& o)
+    { a.template unpack<LL>(o); }
 
   void convert_destroy(bigint& x) { a.convert_destroy(x, ZpD); }
 
@@ -323,6 +330,8 @@ gfp_<X, L> gfp_<X, L>::two;
 
 template<int X, int L>
 const true_type gfp_<X, L>::prime_field;
+template<int X, int L>
+const true_type gfp_<X, L>::optimized_packing;
 
 template<int X, int L>
 thread_local vector<gfp_<X, L>> gfp_<X, L>::powers;
