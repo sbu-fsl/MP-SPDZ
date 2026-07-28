@@ -9,7 +9,7 @@ from Compiler.types import cint, sgf2n
 from Compiler.compilerLib import Compiler
 
 from lrss import get_source_length
-from robust_lrss import robust_lr_rec, robust_lr_share
+from robust_lrss import robust_lr_share
 from utils import get_random_sgf2n
 
 usage = "usage: %prog [options] [args]"
@@ -32,43 +32,24 @@ if not compiler.options.secpar:
 @compiler.register_function('lrpss')
 def lrpss():
     '''
-    Refresh SV shares by reconstructing and resharing. 
-    Assumes 128-bit field. 
+    Generate lrss shares of a uniform 128-bit key (i.e., one field element).  
     '''
     opt = compiler.options
-    args = ("t", "n", "mu", "secpar", "size")
+    args = (t, n, mu, secpar, size)
     t, n, mu, secpar, size = tuple(map(lambda x : int(getattr(opt, x)), args))
 
     PORT_BASE = public_input()
     listen_for_clients(PORT_BASE)
     socket = accept_client_connection(PORT_BASE)
 
-    # See lrss.py for notes on parsing input
-    source_length = seed_length = get_source_length(n, mu, secpar)
-    share_length = source_length + 1 + seed_length + n
-    def parse_input(i):
-        src = [sgf2n.get_input_from(i, size=size) for _ in range(source_length)]
-        ct = sgf2n.get_input_from(i, size=size)
-        ss = [sgf2n.get_input_from(i, size=size) for _ in range(seed_length)]
-        mst = [sgf2n.get_input_from(i, size=size) for _ in range(n)]
-        lr_share = (src, ct, ss, mst)
-        keys = [
-            (sgf2n.get_input_from(i, size=size), sgf2n.get_input_from(i, size=size))
-            for i in range(n)
-        ]
-        tags = [sgf2n.get_input_from(i, size=size) for i in range(n)]
-        return (lr_share, keys, tags)
-
-    # refresh
-    old_shares = [parse_input(i) for i in range(n)]
-    secret = robust_lr_rec(old_shares, size=size)
-    new_shares = robust_lr_share(secret, t, n, mu, secpar, size=size)
+    secret = get_random_sgf2n(128, size=size)
+    shares = robust_lr_share(secret, t, n, mu, secpar, size=size)
 
     # write back shares to appropriate parties
     # using term "block" for field element bc we are working in 128-bit
     # field (like AES)
     for i in range(n):
-        lr_share, keys, tags = new_shares[i]
+        lr_share, keys, tags = shares[i]
         src, ct, ss, mst = lr_share 
         flat_share = [*src, ct, *ss, *mst, *keys, *tags]
         flat_share_personal = [block.reveal_to(i) for block in flat_share]

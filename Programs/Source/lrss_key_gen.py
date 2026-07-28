@@ -44,13 +44,17 @@ def lrpss():
     secret = get_random_sgf2n(128, size=size)
     shares = lr_share(secret, t, n, mu, secpar, size=size)
 
-    for party in range(n):
-        @if_(party == socket)
+    # write back shares to appropriate parties
+    # using term "block" for field element bc we are working in 128-bit
+    # field (like AES)
+    for i in range(n):
+        src, ct, ss, mst = shares[i]
+        flat_share = [*src, ct, *ss, *mst]
+        flat_share_personal = [block.reveal_to(i) for block in flat_share]
+        @if_(i == socket)
         def _():
-            # using "block" to remind each item in share is 128-bits (like AES)
-            # TODO: check github issue to see if we can use cgf2n now. 
-            share_values = [cint(block._v) for block in shares[party]]
-            cint.write_to_socket(socket, share_values)
+            write_back_vals = [cint(block._v) for block in flat_share_personal]
+            cint.write_to_socket(socket, write_back_vals)
 
 if __name__ == "__main__":
     compiler.compile_func()
