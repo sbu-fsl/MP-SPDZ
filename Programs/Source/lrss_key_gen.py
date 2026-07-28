@@ -5,10 +5,11 @@ import os, sys
 sys.path.insert(0, os.path.dirname(sys.argv[0]) + '/../..')
 
 from Compiler.library import listen_for_clients, accept_client_connection, if_, public_input
-from Compiler.types import cint, sgf2n
+from Compiler.types import cint
 from Compiler.compilerLib import Compiler
 
-from lrss import lr_share, lr_rec, get_source_length
+from lrss import lr_share
+from lrss_io import reveal_and_encode_share
 from utils import get_random_sgf2n
 
 usage = "usage: %prog [options] [args]"
@@ -27,15 +28,27 @@ if not compiler.options.mu:
     compiler.parser.error("--mu required")
 if not compiler.options.secpar:
     compiler.parser.error("--secpar required")
+if not compiler.options.size:
+    compiler.parser.error("--size required")
 
-@compiler.register_function('lrpss')
-def lrpss():
+@compiler.register_function('lrss_key_gen')
+def lrss_key_gen():
     '''
-    Generate lrss shares of a uniform 128-bit key (i.e., one field element).  
+    Generate LRSS shares of ``size`` independent uniform 128-bit keys.
     '''
     opt = compiler.options
-    args = (t, n, mu, secpar, size)
-    t, n, mu, secpar, size = tuple(map(lambda x : int(getattr(opt, x)), args))
+    args = ("t", "n", "mu", "secpar", "size")
+    t, n, mu, secpar, size = (
+        int(getattr(opt, name))
+        for name in args
+    )
+    if min(t, n, secpar, size) <= 0 or mu < 0:
+        raise ValueError(
+            "threshold, num-parties, secpar, and size must be positive; "
+            "mu must be non-negative"
+        )
+    if t > n:
+        raise ValueError("threshold cannot exceed num-parties")
 
     PORT_BASE = public_input()
     listen_for_clients(PORT_BASE)
@@ -47,14 +60,14 @@ def lrpss():
     # write back shares to appropriate parties
     # using term "block" for field element bc we are working in 128-bit
     # field (like AES)
+    # The former inline flatten/reveal logic now lives in
+    # lrss_io.reveal_and_encode_share(), together with the encoding used for
+    # socket output.
     for i in range(n):
-        src, ct, ss, mst = shares[i]
-        flat_share = [*src, ct, *ss, *mst]
-        flat_share_personal = [block.reveal_to(i) for block in flat_share]
+        output = reveal_and_encode_share(shares[i], i, size)
         @if_(i == socket)
         def _():
-            write_back_vals = [cint(block._v) for block in flat_share_personal]
-            cint.write_to_socket(socket, write_back_vals)
+            cint.write_to_socket(socket, output)
 
 if __name__ == "__main__":
     compiler.compile_func()
