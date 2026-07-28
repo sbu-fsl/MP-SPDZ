@@ -7,7 +7,6 @@ OUTPUT_VALUE_MASK = (1 << OUTPUT_VALUE_BITS) - 1
 
 
 def read_share(player, num_parties, source_length, size):
-    """Read one SIMD batch of LRSS shares in source|ct|seed|masks order."""
     source = [
         sgf2n.get_input_from(player, size=size)
         for _ in range(source_length)
@@ -25,7 +24,6 @@ def read_share(player, num_parties, source_length, size):
 
 
 def flatten_share(share):
-    """Flatten an LRSS share in the canonical source|ct|seed|masks order."""
     source, ciphertext, seed_shares, mask_shares = share
     return [*source, ciphertext, *seed_shares, *mask_shares]
 
