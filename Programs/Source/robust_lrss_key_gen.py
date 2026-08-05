@@ -5,10 +5,10 @@ import os, sys
 sys.path.insert(0, os.path.dirname(sys.argv[0]) + '/../..')
 
 from Compiler.library import listen_for_clients, accept_client_connection, if_, public_input
-from Compiler.types import cint, sgf2n
+from Compiler.types import cint
 from Compiler.compilerLib import Compiler
 
-from lrss import get_source_length
+from lrss_io import reveal_and_encode_robust_share
 from robust_lrss import robust_lr_share
 from utils import get_random_sgf2n
 
@@ -28,15 +28,24 @@ if not compiler.options.mu:
     compiler.parser.error("--mu required")
 if not compiler.options.secpar:
     compiler.parser.error("--secpar required")
+if not compiler.options.size:
+    compiler.parser.error("--size required")
 
-@compiler.register_function('lrpss')
-def lrpss():
+@compiler.register_function('robust_lrss_key_gen')
+def robust_lrss_key_gen():
     '''
-    Generate lrss shares of a uniform 128-bit key (i.e., one field element).  
+    Generate robust LRSS shares of ``size`` independent uniform 128-bit keys.
     '''
     opt = compiler.options
-    args = (t, n, mu, secpar, size)
+    args = ("t", "n", "mu", "secpar", "size")
     t, n, mu, secpar, size = tuple(map(lambda x : int(getattr(opt, x)), args))
+    if min(t, n, secpar, size) <= 0 or mu < 0:
+        raise ValueError(
+            "threshold, num-parties, secpar, and size must be positive; "
+            "mu must be non-negative"
+        )
+    if t > n:
+        raise ValueError("threshold cannot exceed num-parties")
 
     PORT_BASE = public_input()
     listen_for_clients(PORT_BASE)
@@ -49,13 +58,11 @@ def lrpss():
     # using term "block" for field element bc we are working in 128-bit
     # field (like AES)
     for i in range(n):
-        lr_share, keys, tags = shares[i]
-        src, ct, ss, mst = lr_share 
-        flat_share = [*src, ct, *ss, *mst, *keys, *tags]
-        flat_share_personal = [block.reveal_to(i) for block in flat_share]
+        # Flattening and socket encoding are shared with refresh in lrss_io so
+        # both programs emit the same robust-share layout.
+        write_back_vals = reveal_and_encode_robust_share(shares[i], i, size)
         @if_(i == socket)
         def _():
-            write_back_vals = [cint(block._v) for block in flat_share_personal]
             cint.write_to_socket(socket, write_back_vals)
 
 if __name__ == "__main__":
