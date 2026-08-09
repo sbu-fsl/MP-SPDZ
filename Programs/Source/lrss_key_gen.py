@@ -34,7 +34,7 @@ def lrpss():
     Generate lrss shares of a uniform 128-bit key (i.e., one field element).  
     '''
     opt = compiler.options
-    args = (t, n, mu, secpar, size)
+    args = ("t", "n", "mu", "secpar", "size")
     t, n, mu, secpar, size = tuple(map(lambda x : int(getattr(opt, x)), args))
 
     PORT_BASE = public_input()
