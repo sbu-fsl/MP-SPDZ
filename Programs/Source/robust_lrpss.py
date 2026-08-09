@@ -28,6 +28,8 @@ if not compiler.options.mu:
     compiler.parser.error("--mu required")
 if not compiler.options.secpar:
     compiler.parser.error("--secpar required")
+if not compiler.options.size:
+    compiler.parser.error("--size required")
 
 @compiler.register_function('lrpss')
 def lrpss():
