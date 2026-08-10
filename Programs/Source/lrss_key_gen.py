@@ -28,8 +28,8 @@ if not compiler.options.mu:
 if not compiler.options.secpar:
     compiler.parser.error("--secpar required")
 
-@compiler.register_function('lrpss')
-def lrpss():
+@compiler.register_function('lrss_key_gen')
+def lrss_key_gen():
     '''
     Generate lrss shares of a uniform 128-bit key (i.e., one field element).  
     '''
