@@ -23,7 +23,7 @@ compiler = Compiler(usage=usage)
 @compiler.register_function('arithmetic')
 def main():
 
-    n = 3
+    n = 5
     # sgf2nuint_logn = get_sgf2nuint(math.ceil(math.log2(n) + 1))
     # a = sgf2nuint_logn(1)
     # b = a > 2
