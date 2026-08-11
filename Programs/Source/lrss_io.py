@@ -1,4 +1,4 @@
-from Compiler.types import cint, regint, sgf2n
+from Compiler.types import personal, sgf2n
 
 
 GF2N_BITS = 128
@@ -52,36 +52,40 @@ def flatten_robust_share(share):
     return [*flatten_share(lrss_share), *mac_key_blocks, *mac_tags]
 
 
-def _reveal_and_encode_blocks(blocks, party, size):
-    output = []
-    for block in blocks:
-        revealed = block.reveal_to(party)
-        for lane in range(size):
-            clear_value = revealed[lane]._v
-            output.extend(
-                cint(regint((clear_value >> shift) & OUTPUT_VALUE_MASK))
-                for shift in range(0, GF2N_BITS, OUTPUT_VALUE_BITS)
-            )
-    return output
+def _reveal_and_encode_blocks(blocks, party):
+    # Keep every block and lane in one SIMD vector through socket write-back.
+    flat_blocks = sgf2n.concat(blocks)
+    # sgf2n.reveal_to() does not propagate the vector size when creating its
+    # mask, so request one independent mask per flattened block and lane.
+    secret_mask, clear_mask = sgf2n.get_random_input_mask_for(
+        party, size=flat_blocks.size
+    )
+    revealed = personal(
+        party, (flat_blocks + secret_mask).reveal() - clear_mask
+    )._v
+    return [
+        (revealed >> shift) & OUTPUT_VALUE_MASK
+        for shift in range(0, GF2N_BITS, OUTPUT_VALUE_BITS)
+    ]
 
 
-def reveal_and_encode_share(share, party, size):
+def reveal_and_encode_share(share, party):
     """
     Reveal and encode an LRSS share for socket output.
 
     The share is flattened first. Each GF(2^128) block is emitted in
     block-major, lane-major order as four 32-bit values, least-significant
-    part first. This keeps socket values safely inside the arithmetic
-    clear-value domain.
+    part first. Every part fits safely in the signed integer representation
+    used by cgf2n.write_to_socket().
     """
-    return _reveal_and_encode_blocks(flatten_share(share), party, size)
+    return _reveal_and_encode_blocks(flatten_share(share), party)
 
 
-def reveal_and_encode_robust_share(share, party, size):
+def reveal_and_encode_robust_share(share, party):
     """
     Reveal and encode a robust LRSS share for socket output.
 
     The flat layout is the base LRSS share, two blocks per MAC key, and one
     MAC tag per party.
     """
-    return _reveal_and_encode_blocks(flatten_robust_share(share), party, size)
+    return _reveal_and_encode_blocks(flatten_robust_share(share), party)

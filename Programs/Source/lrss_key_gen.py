@@ -5,7 +5,7 @@ import os, sys
 sys.path.insert(0, os.path.dirname(sys.argv[0]) + '/../..')
 
 from Compiler.library import listen_for_clients, accept_client_connection, if_, public_input
-from Compiler.types import cint
+from Compiler.types import cgf2n
 from Compiler.compilerLib import Compiler
 
 from lrss import lr_share
@@ -64,10 +64,10 @@ def lrss_key_gen():
     # lrss_io.reveal_and_encode_share(), together with the encoding used for
     # socket output.
     for i in range(n):
-        output = reveal_and_encode_share(shares[i], i, size)
+        output = reveal_and_encode_share(shares[i], i)
         @if_(i == socket)
         def _():
-            cint.write_to_socket(socket, output)
+            cgf2n.write_to_socket(socket, output)
 
 if __name__ == "__main__":
     compiler.compile_func()

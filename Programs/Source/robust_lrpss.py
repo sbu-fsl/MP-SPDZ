@@ -5,7 +5,7 @@ import os, sys
 sys.path.insert(0, os.path.dirname(sys.argv[0]) + '/../..')
 
 from Compiler.library import listen_for_clients, accept_client_connection, if_, public_input
-from Compiler.types import cint
+from Compiler.types import cgf2n
 from Compiler.compilerLib import Compiler
 
 from lrss import get_source_length
@@ -72,10 +72,10 @@ def robust_lrpss():
     for i in range(n):
         # Flattening and socket encoding are shared with key generation in
         # lrss_io so both programs emit the same robust-share layout.
-        write_back_vals = reveal_and_encode_robust_share(new_shares[i], i, size)
+        write_back_vals = reveal_and_encode_robust_share(new_shares[i], i)
         @if_(i == socket)
         def _():
-            cint.write_to_socket(socket, write_back_vals)
+            cgf2n.write_to_socket(socket, write_back_vals)
 
 if __name__ == "__main__":
     compiler.compile_func()
