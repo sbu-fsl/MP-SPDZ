@@ -48,7 +48,7 @@ def lr_share(
     desired leakage budget **mu**.  
     
     :param msg: message to be shared.
-    :param threshold: secret sharing threshold
+    :param threshold: secret sharing threshold t for (t+1,n) scheme
     :param num_parties: number of shareholders
     :param mu: number of bits of local leakage allowed on a share
     :param secpar: 2**(- secpar) is desired statistical distance
@@ -125,7 +125,7 @@ if __name__ == "__main__":
         msg = sgf2n(2)
         shares = lr_share(
             msg=msg,
-            threshold=2,
+            threshold=1,
             num_parties=3,
             mu=1,
             secpar=40,
@@ -151,7 +151,7 @@ if __name__ == "__main__":
         size = 100
         shares = lr_share(
             msg=msg,
-            threshold=2,
+            threshold=1,
             num_parties=3,
             mu=1,
             secpar=40,
@@ -171,7 +171,7 @@ if __name__ == "__main__":
         size = 100
         shares = lr_share(
             msg=msg,
-            threshold=2,
+            threshold=1,
             num_parties=3,
             mu=32,
             secpar=128,

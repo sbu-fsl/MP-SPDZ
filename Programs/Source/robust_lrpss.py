@@ -45,8 +45,8 @@ def robust_lrpss():
             "threshold, num-parties, secpar, and size must be positive; "
             "mu must be non-negative"
         )
-    if t > n:
-        raise ValueError("threshold cannot exceed num-parties")
+    if t >= n:
+        raise ValueError("threshold must be less than num-parties")
 
     PORT_BASE = public_input()
     listen_for_clients(PORT_BASE)

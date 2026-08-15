@@ -123,7 +123,7 @@ if __name__ == "__main__":
         msg = sgf2n(2)
         shares = robust_lr_share(
             msg=msg,
-            threshold=2,
+            threshold=1,
             num_parties=3,
             mu=1,
             secpar=40,
@@ -142,7 +142,7 @@ if __name__ == "__main__":
         size = 100
         shares = robust_lr_share(
             msg=msg,
-            threshold=2,
+            threshold=1,
             num_parties=3,
             mu=1,
             secpar=40,

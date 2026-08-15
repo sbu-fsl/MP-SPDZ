@@ -25,7 +25,7 @@ def shamir_share[K,X](
     :param eval_points: Defaults to 1,...,num_parties in clear type corresponding to msg type. 
     :param rand: Representing secret polynomial coefficients. Generated internally by default.
     '''
-    assert threshold <= num_parties
+    assert threshold < num_parties
     kt = type(msg)
     ct = kt if not hasattr(kt, "clear_type") else kt.clear_type
 
@@ -36,20 +36,18 @@ def shamir_share[K,X](
         eval_points = [ct(i, size=size) for i in range(1, num_parties+1)] 
     
     # setup poly_coeffs
-    poly_coeffs = []
     if rand:
         assert(len(rand) == threshold)
-        poly_coeffs = rand
     else:
         if kt == sgf2n:
-            poly_coeffs = [get_random_sgf2n(128, size=size) for _ in range(threshold)] 
+            rand = [get_random_sgf2n(128, size=size) for _ in range(threshold)] 
         elif kt == sint:
-            poly_coeffs = [sint.get_random(size=size) for _ in range(threshold)]
+            rand = [sint.get_random(size=size) for _ in range(threshold)]
         elif kt == cint:
-            poly_coeffs = [cint(regint.get_random(128, size=size)) for _ in range(threshold)]
+            rand = [cint(regint.get_random(128, size=size)) for _ in range(threshold)]
         else:
             raise TypeError(f"type {kt} not yet supported")
-    poly_coeffs[0] = msg
+    poly_coeffs = [msg] + rand
     
     # compute share values
     vals = [poly_eval(poly_coeffs, eval_points[i]) for i in range(num_parties)]
@@ -102,7 +100,7 @@ if __name__ == "__main__":
 
         # Test 1: sgf2n, defaults
         msg = sgf2n(1)
-        threshold = 2
+        threshold = 1
         num_parties = 3
         _,y = shamir_share(msg, threshold=threshold, num_parties=num_parties)
         secret: sgf2n = shamir_reconstruct(y)
@@ -132,7 +130,7 @@ if __name__ == "__main__":
         # Test 3: sgf2n, embedding
         msg = sgf2n(64)
         msg_emb = apply_field_embedding(msg)
-        threshold = 2
+        threshold = 1
         num_parties = 3
         eval_points = [apply_field_embedding(cgf2n(i)) for i in range(1,num_parties+1)]
         rand = [apply_field_embedding(get_random_sgf2n(8)) for _ in range(threshold)]
@@ -150,7 +148,7 @@ if __name__ == "__main__":
         msg = sgf2n([1,2,3,4,5])
         msg_emb = apply_field_embedding(msg)
         size = 5
-        threshold = 2
+        threshold = 1
         num_parties = 3
         eval_points = [apply_field_embedding(cgf2n(i)) for i in range(1,num_parties+1)]
         rand = [apply_field_embedding(get_random_sgf2n(8, size=size)) for _ in range(threshold)]
