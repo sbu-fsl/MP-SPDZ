@@ -4,12 +4,11 @@ import os, sys
 # add MP-SPDZ dir to path so we can import from Compiler
 sys.path.insert(0, os.path.dirname(sys.argv[0]) + '/../..')
 
-from Compiler.library import listen_for_clients, accept_client_connection, if_, public_input
-from Compiler.types import cgf2n
+from Compiler.library import listen_for_clients, accept_client_connection, public_input
 from Compiler.compilerLib import Compiler
 
 from lrss import get_source_length
-from lrss_io import read_robust_share, reveal_and_encode_robust_share
+from share_io import read_blocks, write_shares_to_socket
 from robust_lrss import robust_lr_rec, robust_lr_share
 
 usage = "usage: %prog [options] [args]"
@@ -52,30 +51,34 @@ def robust_lrpss():
     listen_for_clients(PORT_BASE)
     socket = accept_client_connection(PORT_BASE)
 
-    # See lrss.py for notes on parsing input
-    # Robust input parsing is shared with key generation through lrss_io.
-    # Robust shares extend the LRSS layout with n MAC key pairs and n tags.
-    # Every component of party i's share is read from player i.
     source_length = get_source_length(n, mu, secpar)
 
     # refresh
-    old_shares = [
-        read_robust_share(i, n, source_length, size)
-        for i in range(n)
-    ]
+    old_shares = []
+    base_share_length = 2 * source_length + n + 1
+    for i in range(n):
+        blocks = read_blocks(i, base_share_length + 3 * n, size)
+        lrss_blocks = blocks[:base_share_length]
+        mac_key_blocks = blocks[base_share_length:base_share_length + 2 * n]
+        old_shares.append(
+            (
+                (
+                    lrss_blocks[:source_length],
+                    lrss_blocks[source_length],
+                    lrss_blocks[source_length + 1:2 * source_length + 1],
+                    lrss_blocks[2 * source_length + 1:],
+                ),
+                [
+                    tuple(mac_key_blocks[j:j + 2])
+                    for j in range(0, 2 * n, 2)
+                ],
+                blocks[base_share_length + 2 * n:],
+            )
+        )
     secret = robust_lr_rec(old_shares, size=size)
     new_shares = robust_lr_share(secret, t, n, mu, secpar, size=size)
 
-    # write back shares to appropriate parties
-    # using term "block" for field element bc we are working in 128-bit
-    # field (like AES)
-    for i in range(n):
-        # Flattening and socket encoding are shared with key generation in
-        # lrss_io so both programs emit the same robust-share layout.
-        write_back_vals = reveal_and_encode_robust_share(new_shares[i], i)
-        @if_(i == socket)
-        def _():
-            cgf2n.write_to_socket(socket, write_back_vals)
+    write_shares_to_socket(socket, new_shares)
 
 if __name__ == "__main__":
     compiler.compile_func()

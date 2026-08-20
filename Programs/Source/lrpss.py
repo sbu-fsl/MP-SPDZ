@@ -4,12 +4,11 @@ import os, sys
 # add MP-SPDZ dir to path so we can import from Compiler
 sys.path.insert(0, os.path.dirname(sys.argv[0]) + '/../..')
 
-from Compiler.library import listen_for_clients, accept_client_connection, if_, public_input
-from Compiler.types import cgf2n
+from Compiler.library import listen_for_clients, accept_client_connection, public_input
 from Compiler.compilerLib import Compiler
 
 from lrss import lr_share, lr_rec, get_source_length
-from lrss_io import read_share, reveal_and_encode_share
+from share_io import read_blocks, write_shares_to_socket
 
 usage = "usage: %prog [options] [args]"
 compiler = Compiler(usage=usage)
@@ -74,28 +73,24 @@ def lrpss():
     seed_length + n`.
     '''
 
-    # The former inline parse_input() helper now lives in lrss_io.read_share().
     source_length = get_source_length(n, mu, secpar)
 
     # refresh is short and sweet
-    old_shares = [
-        read_share(i, n, source_length, size)
-        for i in range(n)
-    ]
+    old_shares = []
+    for i in range(n):
+        blocks = read_blocks(i, 2 * source_length + n + 1, size)
+        old_shares.append(
+            (
+                blocks[:source_length], # source
+                blocks[source_length], # ct
+                blocks[source_length + 1:2 * source_length + 1], # seed_shares
+                blocks[2 * source_length + 1:], # mask_shares_transposed
+            )
+        )
     secret = lr_rec(old_shares, size=size)
     new_shares = lr_share(secret, t, n, mu, secpar, size=size)
 
-    # write back shares to appropriate parties
-    # using term "block" for field element bc we are working in 128-bit
-    # field (like AES)
-    # The former inline flatten/reveal logic now lives in
-    # lrss_io.reveal_and_encode_share(), together with the encoding used for
-    # socket output.
-    for i in range(n):
-        output = reveal_and_encode_share(new_shares[i], i)
-        @if_(i == socket)
-        def _():
-            cgf2n.write_to_socket(socket, output)
+    write_shares_to_socket(socket, new_shares)
 
 if __name__ == "__main__":
     compiler.compile_func()

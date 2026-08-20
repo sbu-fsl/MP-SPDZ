@@ -4,12 +4,11 @@ import os, sys
 # add MP-SPDZ dir to path so we can import from Compiler
 sys.path.insert(0, os.path.dirname(sys.argv[0]) + '/../..')
 
-from Compiler.library import listen_for_clients, accept_client_connection, if_, public_input
-from Compiler.types import cgf2n
+from Compiler.library import listen_for_clients, accept_client_connection, public_input
 from Compiler.compilerLib import Compiler
 
 from lrss import lr_share
-from lrss_io import reveal_and_encode_share
+from share_io import write_shares_to_socket
 from utils import get_random_sgf2n
 
 usage = "usage: %prog [options] [args]"
@@ -57,17 +56,7 @@ def lrss_key_gen():
     secret = get_random_sgf2n(128, size=size)
     shares = lr_share(secret, t, n, mu, secpar, size=size)
 
-    # write back shares to appropriate parties
-    # using term "block" for field element bc we are working in 128-bit
-    # field (like AES)
-    # The former inline flatten/reveal logic now lives in
-    # lrss_io.reveal_and_encode_share(), together with the encoding used for
-    # socket output.
-    for i in range(n):
-        output = reveal_and_encode_share(shares[i], i)
-        @if_(i == socket)
-        def _():
-            cgf2n.write_to_socket(socket, output)
+    write_shares_to_socket(socket, shares)
 
 if __name__ == "__main__":
     compiler.compile_func()

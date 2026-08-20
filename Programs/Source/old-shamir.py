@@ -105,7 +105,7 @@ if __name__ == "__main__":
         reconstructed_msg = shamir_reconstruct(eval_points, poly_evals)
         print_ln("reconstructed_msg=%s", sgf2n(reconstructed_msg.reveal()).reveal())
 
-        print_ln("----Test 4 (buggy case discovered from pss.py)----")
+        print_ln("----Test 4 (buggy case discovered from shamir_pss.py)----")
         msg = apply_field_embedding(sgf2n(114))
         print_ln("msg_unembedded=%s, msg_embedded=%s", cgf2n(114), msg.reveal())
         eval_points_embedded = Array(3, sgf2n).assign([apply_field_embedding(sgf2n(i)) for i in range(1,4)])
@@ -127,7 +127,7 @@ if __name__ == "__main__":
         reconstructed_msg = shamir_reconstruct(poly_evals, eval_points=eval_points_embedded)
         print_ln("reconstructed_msg_embedded=%s, reconstructed_msg_unembedded=%s", reconstructed_msg.reveal(), apply_inverse_field_embedding(reconstructed_msg).reveal())
 
-        print_ln("----Test 6 (another bug from pss.py)----")
+        print_ln("----Test 6 (another bug from shamir_pss.py)----")
         eval_points_embedded = Array(3, sgf2n).assign([apply_field_embedding(sgf2n(i)) for i in range(1,4)])
         poly_evals_embedded = [apply_field_embedding(x) for x in [sgf2n(198), sgf2n(64), sgf2n(203)]]
         print_ln("poly_evals_embedded=%s", [x.reveal() for x in poly_evals_embedded])
