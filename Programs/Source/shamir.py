@@ -8,7 +8,13 @@ from Compiler.types import sint, cint, Array, sgf2n, cgf2n, regint, _number
 from Compiler.compilerLib import Compiler # only used for testing
 
 # we assume these modules reside in Programs/Source/
-from utils import get_random_sgf2n, poly_eval, interpolate_zero, obliv_interpolate_zero
+from utils import (
+    get_random_sgf2n,
+    get_random_sgf2n_bits,
+    poly_eval,
+    interpolate_zero,
+    obliv_interpolate_zero,
+)
 from embeddings import apply_field_embedding, apply_inverse_field_embedding
 
 def shamir_share[K,X](
@@ -40,7 +46,7 @@ def shamir_share[K,X](
         assert(len(rand) == threshold)
     else:
         if kt == sgf2n:
-            rand = [get_random_sgf2n(128, size=size) for _ in range(threshold)] 
+            rand = [get_random_sgf2n(size=size) for _ in range(threshold)]
         elif kt == sint:
             rand = [sint.get_random(size=size) for _ in range(threshold)]
         elif kt == cint:
@@ -133,7 +139,7 @@ if __name__ == "__main__":
         threshold = 1
         num_parties = 3
         eval_points = [apply_field_embedding(cgf2n(i)) for i in range(1,num_parties+1)]
-        rand = [apply_field_embedding(get_random_sgf2n(8)) for _ in range(threshold)]
+        rand = [apply_field_embedding(get_random_sgf2n_bits(8)) for _ in range(threshold)]
         _,y = shamir_share(msg_emb, threshold=threshold, num_parties=num_parties, eval_points=eval_points, rand=rand)
         secret: sgf2n = apply_inverse_field_embedding(shamir_reconstruct(y))
         error_pattern = (secret - msg).reveal()
@@ -151,7 +157,7 @@ if __name__ == "__main__":
         threshold = 1
         num_parties = 3
         eval_points = [apply_field_embedding(cgf2n(i)) for i in range(1,num_parties+1)]
-        rand = [apply_field_embedding(get_random_sgf2n(8, size=size)) for _ in range(threshold)]
+        rand = [apply_field_embedding(get_random_sgf2n_bits(8, size=size)) for _ in range(threshold)]
         _,y = shamir_share(
             msg_emb, 
             threshold=threshold, 

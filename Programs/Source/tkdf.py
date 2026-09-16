@@ -12,7 +12,7 @@ from Compiler.compilerLib import Compiler
 from Programs.Source.shamir import shamir_reconstruct, shamir_share
 from embeddings import apply_field_embedding, apply_inverse_field_embedding
 from kdf_ctr import kdf_ctr, BLOCK_SIZE
-from utils import get_random_sgf2n
+from utils import get_random_sgf2n_bits
 
 usage = "usage: %prog [options] [args]"
 compiler = Compiler(usage=usage)
@@ -73,7 +73,7 @@ def tkdf():
     # secret share and reveal each share to appropriate party
     child_key_shares_by_party = {party: None for party in range(n)}
     child_key_emb = apply_field_embedding(sgf2n(child_key, size=num_bytes_child_key)) # vectorize and embed before secret sharing
-    rand_emb = [apply_field_embedding(get_random_sgf2n(8, size=num_bytes_child_key)) for _ in range(t)]
+    rand_emb = [apply_field_embedding(get_random_sgf2n_bits(8, size=num_bytes_child_key)) for _ in range(t)]
     _, child_key_shares_emb = shamir_share(
         msg=child_key_emb, 
         threshold=t, 

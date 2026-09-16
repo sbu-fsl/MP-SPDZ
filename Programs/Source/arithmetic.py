@@ -13,7 +13,7 @@ from Compiler.GC.types import sbits, sbitint, sbitvec, sbit
 from Compiler.compilerLib import Compiler
 from Compiler.oram import OptimalORAM
 
-from utils import get_random_sgf2n
+from utils import get_random_sgf2n_bits
 
 
 usage = "usage: %prog" # not taking any arguments for now

@@ -52,15 +52,15 @@ def test_oram():
             res = b.cond_swap(res, t(i))[0]
         return res
 
-    def get_random_sgf2n(bit_length: int) -> sgf2n:
+    def get_random_sgf2n_bits(bit_length: int) -> sgf2n:
         return sgf2n.bit_compose([sgf2n.get_random_bit() for _ in range(bit_length)])
     
     x = OptimalORAM(5, sgf2n)
     r = OptimalORAM(5, sgf2n)
     y = sgf2n(1)
     for i in range(5):
-        x[i] = apply_field_embedding(get_random_sgf2n(8))
-        r[i] = apply_field_embedding(get_random_sgf2n(8))
+        x[i] = apply_field_embedding(get_random_sgf2n_bits(8))
+        r[i] = apply_field_embedding(get_random_sgf2n_bits(8))
     j = find_nonzero_secret_idx(r)
     x_j, r_j = r[j], x[j]
     x[j] = (y - (sum(x[i] * r[i] for i in range(5)) - (x_j * r_j))).field_div(r_j)

@@ -38,11 +38,21 @@ def str_to_hex(x):
     '''
     return [int(x[i : i + 2], 16) for i in range(0, len(x), 2)]
 
-def get_random_sgf2n(bit_length: int, size=1) -> sgf2n:
+def get_random_sgf2n_bits(bit_length: int, size: int = 1) -> sgf2n:
     '''
-    Sample a sgf2n element where lower **bit_length**-many bits are uniformly random. 
+    Sample an sgf2n element where lower **bit_length**-many bits are uniformly
+    random and all upper bits are zero.
     '''
     return sgf2n.bit_compose([sgf2n.get_random_bit(size=size) for _ in range(bit_length)])
+
+def get_random_sgf2n(size: int = 1) -> sgf2n:
+    '''
+    Sample a uniform secret element of the active GF(2^n) field.
+    '''
+    # The first factor of an MP-SPDZ multiplication triple is uniform over the
+    # compiled field. The other two factors are intentionally consumed and
+    # discarded.
+    return sgf2n.get_random_triple(size=size)[0]
 
 def poly_eval[S,T: _number](coeffs: list[S], x: T) -> S|T:
     '''
@@ -123,7 +133,7 @@ def dot_product_random_preimage(
     x_oram = OptimalORAM(size, sgf2n)
     for i in range(size):
         r_oram[i] = r[i]
-        x_oram[i] = apply_field_embedding(get_random_sgf2n(8))
+        x_oram[i] = apply_field_embedding(get_random_sgf2n_bits(8))
     # solve for x
     j = find_nonzero_secret_idx(r_oram)
     x_j, r_j = x_oram[j], r_oram[j]

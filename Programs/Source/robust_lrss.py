@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 
 import os, sys, math
-from itertools import product, chain
+from itertools import product
 # add MP-SPDZ dir to path so we can import from Compiler
 sys.path.insert(0, os.path.dirname(sys.argv[0]) + '/../..') 
 from Compiler.library import print_ln, if_e, else_
@@ -10,8 +10,8 @@ from Compiler.compilerLib import Compiler # only used for testing
 
 # we assume these modules reside in Programs/Source/
 from lrss import lr_share
-from shamir import shamir_share, shamir_reconstruct, obliv_shamir_reconstruct
-from utils import get_random_sgf2n, poly_eval, mac, mac_verify
+from shamir import obliv_shamir_reconstruct
+from utils import get_random_sgf2n, mac, mac_verify
 
 def robust_lr_share(
         msg: sgf2n,
@@ -28,7 +28,10 @@ def robust_lr_share(
     lr_shares = lr_share(msg, threshold, n, mu, secpar, size)
     pairs = list(product(range(n),repeat=2))
     keys = {
-        (j,i): (get_random_sgf2n(128, size=size), get_random_sgf2n(128, size=size)) 
+        (j,i): (
+            get_random_sgf2n(size=size),
+            get_random_sgf2n(size=size),
+        )
         for j,i in pairs
     }
     tags = {}
@@ -158,4 +161,3 @@ if __name__ == "__main__":
             print_ln("✅ TEST 2 PASSED")
     
     compiler.compile_func()
-

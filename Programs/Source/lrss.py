@@ -63,9 +63,9 @@ def lr_share(
     intermediate_shares = shamir_share(msg, threshold, num_parties, size=size)[1]
 
     # uniformly sample one extractor seed, num_parties sources, and num_parties masks
-    seed = [get_random_sgf2n(128, size=size) for _ in range(seed_length)]
-    sources = [[get_random_sgf2n(128, size=size) for _ in range(source_length)] for _ in range(num_parties)]
-    masks = [get_random_sgf2n(128, size=size) for _ in range(num_parties)]
+    seed = [get_random_sgf2n(size=size) for _ in range(seed_length)]
+    sources = [[get_random_sgf2n(size=size) for _ in range(source_length)] for _ in range(num_parties)]
+    masks = [get_random_sgf2n(size=size) for _ in range(num_parties)]
 
     # double mask intermediate shares
     # crucially assumes characteristic-two field where addition is XOR
@@ -187,4 +187,3 @@ if __name__ == "__main__":
             print_ln("✅ TEST 3 PASSED")
     
     compiler.compile_func()
-

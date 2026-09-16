@@ -50,7 +50,7 @@ def robust_lrss_key_gen():
     listen_for_clients(PORT_BASE)
     socket = accept_client_connection(PORT_BASE)
 
-    secret = get_random_sgf2n(128, size=size)
+    secret = get_random_sgf2n(size=size)
     shares = robust_lr_share(secret, t, n, mu, secpar, size=size)
 
     write_shares_to_socket(socket, shares)
