@@ -1,12 +1,14 @@
 #!/usr/bin/env python3
 
 import os, sys
+from operator import mul
 # add MP-SPDZ dir to path so we can import from Compiler
 sys.path.insert(0, os.path.dirname(sys.argv[0]) + '/../..') 
 from Compiler.library import print_ln, if_e, else_
 from Compiler.types import sint, cint, Array, sgf2n, cgf2n, regint, _number, _secret
 from Compiler.compilerLib import Compiler # only used for testing
 from Compiler.oram import OptimalORAM, AbstractORAM
+from Compiler.util import tree_reduce
 
 # we assume these modules reside in Programs/Source/ 
 from embeddings import apply_field_embedding, apply_inverse_field_embedding
@@ -63,6 +65,27 @@ def poly_eval[S,T: _number](coeffs: list[S], x: T) -> S|T:
         return coeffs[0]
     return coeffs[0] + x * poly_eval(coeffs[1:], x)
 
+def poly_eval_balanced[S,T: _number](coeffs: list[S], x: T) -> S|T:
+    '''
+    Evaluate a non-empty polynomial with logarithmic multiplication depth.
+
+    Coefficients are split into the even and odd powers recursively, using
+    p(x) = p_even(x^2) + x * p_odd(x^2). ``poly_eval()`` intentionally remains
+    the Horner evaluator for callers that do not need this larger circuit.
+    '''
+    assert len(coeffs) > 0
+    powers = [x]
+    for _ in range((len(coeffs) - 1).bit_length() - 1):
+        powers.append(powers[-1] * powers[-1])
+
+    def evaluate(values, depth):
+        if len(values) == 1:
+            return values[0]
+        return (evaluate(values[::2], depth + 1)
+                + powers[depth] * evaluate(values[1::2], depth + 1))
+
+    return evaluate(coeffs, 0)
+
 def interpolate_zero[X,Y: _number](xs: list[X], ys: list[Y], size=1) -> Y:
     '''
     Lagrange interpolate the point at x=0 from the points given by zip(xs,ys)
@@ -79,29 +102,47 @@ def interpolate_zero[X,Y: _number](xs: list[X], ys: list[Y], size=1) -> Y:
         res += ys[i] * prod 
     return res
 
-def obliv_interpolate_zero(
-    xs: list, 
+def obliv_interpolation_weights(
+    xs: list,
     valid_xs: list,
-    ys: list, 
     size: int=1
-) -> sgf2n:
+) -> list[sgf2n]:
     '''
-    Lagrange interpolate the point at x=0 from points given by zip(xs,ys),
-    excluding the points where valid_xs[i] == sgf2n(0). Useful as a subroutine
-    in robust secret sharing reconstruction.
+    Secret Lagrange weights at zero, excluding invalid coordinates.
+
+    Reuse these weights for different values with the same coordinates and
+    validity bitmap. An invalid coordinate has weight zero.
+
+    Inputs must be nonempty and equally sized. Coordinates must be distinct
+    field elements, and validity entries must be secret bits (zero or one).
     '''
-    assert(len(xs) == len(valid_xs) and len(xs) == len(ys))
+    assert(len(xs) == len(valid_xs))
     n = len(xs)
-    t = type(ys[0])
-    res = t(0, size=size)
+    t = type(valid_xs[0])
+    one = t(1, size=size)
+    weights = []
     for i in range(n):
-        prod = t(1, size=size)
+        factors = []
         for j in range(n):
             if j != i:
-                rational_term = xs[j].field_div((xs[j] - xs[i]))
-                prod *= valid_xs[j].cond_swap(t(1), rational_term)[0]
-        res += ys[i] * prod * valid_xs[i]
-    return res
+                rational_term = xs[j].field_div(xs[j] - xs[i])
+                factors.append(valid_xs[j].if_else(rational_term, one))
+        prod = tree_reduce(mul, factors) if factors else one
+        weights.append(prod * valid_xs[i])
+    return weights
+
+
+def obliv_interpolate_zero(
+    xs: list,
+    valid_xs: list,
+    ys: list,
+    size: int=1
+) -> sgf2n:
+    '''Interpolate at zero, excluding coordinates with validity bit zero.'''
+    assert(len(xs) == len(valid_xs) and len(xs) == len(ys))
+    weights = obliv_interpolation_weights(xs, valid_xs, size=size)
+    return sum((y * weight for y, weight in zip(ys, weights)),
+               type(ys[0])(0, size=size))
 
 
 def find_nonzero_secret_idx(arr: AbstractORAM) -> _secret:
@@ -142,14 +183,13 @@ def dot_product_random_preimage(
 
 def mac(key: tuple[sgf2n, sgf2n], msg: list[sgf2n]) -> sgf2n:
     '''
-    One-time MAC from polynomial hashing.
+    One-time MAC from polynomial hashing with logarithmic multiplication depth.
 
     :param key: a tuple (a,b) 
     :param msg: a list of sgf2n
     '''
-    a,b = key
-    tag = poly_eval(coeffs=[a]+msg, x=b)
-    return tag
+    a, b = key
+    return poly_eval_balanced([a] + msg, b)
 
 def mac_verify(key: tuple[sgf2n, sgf2n], msg:list[sgf2n], tag: sgf2n) -> sgf2n:
     '''

@@ -1,5 +1,5 @@
-from Compiler.library import if_
-from Compiler.types import cgf2n, personal, sgf2n
+from Compiler.library import get_program, if_
+from Compiler.types import Array, cgf2n, personal, sgf2n
 
 
 GF2N_BITS = 128
@@ -37,20 +37,38 @@ def reveal_and_encode_share(share, party):
     if not blocks:
         raise ValueError("cannot encode an empty share")
 
-    # Keep every block and lane in one SIMD vector through socket write-back.
-    flat_blocks = sgf2n.concat(blocks)
-    # sgf2n.reveal_to() does not propagate the vector size when creating its
-    # mask, so request one independent mask per flattened block and lane.
-    secret_mask, clear_mask = sgf2n.get_random_input_mask_for(
-        party, size=flat_blocks.size
-    )
-    revealed = personal(
-        party, (flat_blocks + secret_mask).reveal() - clear_mask
-    )._v
-    return [
-        (revealed >> shift) & OUTPUT_VALUE_MASK
-        for shift in range(0, GF2N_BITS, OUTPUT_VALUE_BITS)
+    # Stage each word in memory to avoid concat's per-lane register expansion.
+    # Socket writes interleave vectors lane-first, so four block-major word
+    # arrays preserve block -> lane -> word order in a single socket message.
+    lane_count = sum(block.size for block in blocks)
+    words = [
+        Array(lane_count, cgf2n)
+        for _ in range(0, GF2N_BITS, OUTPUT_VALUE_BITS)
     ]
+    # Large vector loads exceed the optimizer's memory-dependency budget.
+    # Protect staging stores/loads, including reuse across calls, explicitly.
+    program = get_program()
+    program.open_memory_scope(reveal_and_encode_share)
+    try:
+        offset = 0
+        for block in blocks:
+            # reveal_to() does not propagate vector size to its mask allocation.
+            secret_mask, clear_mask = sgf2n.get_random_input_mask_for(
+                party, size=block.size
+            )
+            revealed = personal(
+                party, (block + secret_mask).reveal() - clear_mask
+            )._v
+            for word, shift in zip(words, range(0, GF2N_BITS, OUTPUT_VALUE_BITS)):
+                word.assign_vector((revealed >> shift) & OUTPUT_VALUE_MASK, offset)
+            offset += block.size
+
+        output = [word.get_vector() for word in words]
+    finally:
+        program.close_memory_scope()
+    for word in words:
+        word.delete()
+    return output
 
 
 def write_shares_to_socket(socket, shares):
