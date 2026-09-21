@@ -6,7 +6,7 @@ from itertools import product
 from operator import mul
 # add MP-SPDZ dir to path so we can import from Compiler
 sys.path.insert(0, os.path.dirname(sys.argv[0]) + '/../..') 
-from Compiler.library import print_ln, if_e, else_
+from Compiler.library import print_ln, if_e, else_, start_timer, stop_timer
 from Compiler.types import sgf2n, cgf2n, get_sgf2nuint
 from Compiler.compilerLib import Compiler # only used for testing
 from Compiler.util import tree_reduce
@@ -97,8 +97,10 @@ def robust_lr_rec(
 
     Include one share per party, using the layout returned by robust_lr_share.
     Each verifier produces a candidate using the shares its MAC checks accept.
-    Return the strict-majority candidate, or zero if no strict majority exists.
+    Return the strict-majority candidate, or zero if no strict majority exists. 
     '''
+    start_timer(1)
+
     n = len(shares) 
     lr_shares = [s[0] for s in shares]
     pairs = list(product(range(n), repeat=2))
@@ -111,6 +113,8 @@ def robust_lr_rec(
 
     # mac_verifies[owner][verifier] is a secret bit indicating verifier's acceptance 
     # of owner's share
+    start_timer(2)
+    # TODO: this is the bottleneck - can we parallelize?
     mac_verifies = [
         [
             mac_verify(keys[(verifier, owner)], mac_messages[owner], tags[(verifier, owner)]) 
@@ -118,6 +122,8 @@ def robust_lr_rec(
         ] 
         for owner in range(n)
     ]
+    stop_timer(2)
+
     # valid_coords[i] == sgf2n(1) iff a majority of entries in mac_verifies[i] equal sgf2n(1)
     valid_coords = [
         _has_strict_majority(_frequency_sum(mac_verifies[i], size=size), n) for i in range(n)
@@ -132,6 +138,8 @@ def robust_lr_rec(
     extractor_outputs = [dot(seed, src) for src in sources]
     intermediate_shares = [ct[i] + extractor_outputs[i] + masks[i] for i in range(len(ct))]
     msg = dot(intermediate_shares, weights)
+
+    stop_timer(1)
     return msg
 
 
