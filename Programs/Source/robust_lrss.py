@@ -7,7 +7,7 @@ from operator import mul
 # add MP-SPDZ dir to path so we can import from Compiler
 sys.path.insert(0, os.path.dirname(sys.argv[0]) + '/../..') 
 from Compiler.library import print_ln, if_e, else_, start_timer, stop_timer
-from Compiler.types import sgf2n, cgf2n, get_sgf2nuint
+from Compiler.types import sgf2n, cgf2n, get_sgf2nuint, MemValue, MPCThread
 from Compiler.compilerLib import Compiler # only used for testing
 from Compiler.util import tree_reduce
 
@@ -98,31 +98,43 @@ def robust_lr_rec(
     Include one share per party, using the layout returned by robust_lr_share.
     Each verifier produces a candidate using the shares its MAC checks accept.
     Return the strict-majority candidate, or zero if no strict majority exists. 
+
+    Pairwise MAC checks run in one MP-SPDZ worker thread per verifier.
     '''
-    start_timer(1)
 
     n = len(shares) 
     lr_shares = [s[0] for s in shares]
     pairs = list(product(range(n), repeat=2))
-    keys = {(verifier, owner): shares[verifier][1][owner]
+    # MemValue shares scalar or SIMD values between MP-SPDZ threads.
+    keys = {(verifier, owner): tuple(MemValue(k) for k in shares[verifier][1][owner])
             for verifier, owner in pairs}
-    tags = {(verifier, owner): shares[owner][2][verifier]
+    tags = {(verifier, owner): MemValue(shares[owner][2][verifier])
             for verifier, owner in pairs}
     coords = [cgf2n(j, size=size) for j in range(1, n + 1)]
-    mac_messages = [_parse_mac_message(share) for share in lr_shares]
+    mac_messages = [[MemValue(x) for x in _parse_mac_message(share)] for share in lr_shares]
 
     # mac_verifies[owner][verifier] is a secret bit indicating verifier's acceptance 
     # of owner's share
-    start_timer(2)
-    # TODO: this is the bottleneck - can we parallelize?
-    mac_verifies = [
-        [
-            mac_verify(keys[(verifier, owner)], mac_messages[owner], tags[(verifier, owner)]) 
-            for verifier in range(n)
-        ] 
-        for owner in range(n)
-    ]
-    stop_timer(2)
+    start_timer(1)
+    mac_verifies = [[MemValue(sgf2n(0, size=size)) for verifier in range(n)]
+                    for owner in range(n)]
+
+    def verify_shares(verifier):
+        for owner in range(n):
+            key = tuple(k.read() for k in keys[verifier, owner])
+            message = [x.read() for x in mac_messages[owner]]
+            tag = tags[verifier, owner].read()
+            mac_verifies[owner][verifier].write(mac_verify(key, message, tag))
+
+    # Each tape runs once and writes only its verifier's column.
+    threads = [MPCThread(verify_shares, 'mac_verify', args=[verifier], single_thread=True)
+               for verifier in range(n)]
+    for thread in threads:
+        thread.start()
+    for thread in threads:
+        thread.join()
+    mac_verifies = [[bit.read() for bit in row] for row in mac_verifies]
+    stop_timer(1)
 
     # valid_coords[i] == sgf2n(1) iff a majority of entries in mac_verifies[i] equal sgf2n(1)
     valid_coords = [
@@ -139,7 +151,6 @@ def robust_lr_rec(
     intermediate_shares = [ct[i] + extractor_outputs[i] + masks[i] for i in range(len(ct))]
     msg = dot(intermediate_shares, weights)
 
-    stop_timer(1)
     return msg
 
 
