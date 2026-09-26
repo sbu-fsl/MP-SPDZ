@@ -96,10 +96,9 @@ def robust_lr_rec(
     Reconstruct from a nonempty list of robust shares in original party order.
 
     Include one share per party, using the layout returned by robust_lr_share.
-    Each verifier produces a candidate using the shares its MAC checks accept.
-    Return the strict-majority candidate, or zero if no strict majority exists. 
+    Reconstruct using the owners' shares accepted by a strict majority of verifiers.
 
-    Pairwise MAC checks run in one MP-SPDZ worker thread per verifier.
+    MAC checks and the majority predicate run in one MP-SPDZ worker per owner.
     '''
 
     n = len(shares) 
@@ -113,33 +112,33 @@ def robust_lr_rec(
     coords = [cgf2n(j, size=size) for j in range(1, n + 1)]
     mac_messages = [[MemValue(x) for x in _parse_mac_message(share)] for share in lr_shares]
 
-    # mac_verifies[owner][verifier] is a secret bit indicating verifier's acceptance 
+    # mac_verifies[verifier][owner] is a secret bit indicating verifier's acceptance
     # of owner's share
     start_timer(1)
-    mac_verifies = [[MemValue(sgf2n(0, size=size)) for verifier in range(n)]
-                    for owner in range(n)]
+    mac_verifies = [[MemValue(sgf2n(0, size=size)) for owner in range(n)]
+                    for verifier in range(n)]
+    valid_coords = [MemValue(sgf2n(0, size=size)) for owner in range(n)]
 
-    def verify_shares(verifier):
-        for owner in range(n):
+    def is_valid_coord(owner):
+        message = [x.read() for x in mac_messages[owner]]
+        for verifier in range(n):
             key = tuple(k.read() for k in keys[verifier, owner])
-            message = [x.read() for x in mac_messages[owner]]
             tag = tags[verifier, owner].read()
-            mac_verifies[owner][verifier].write(mac_verify(key, message, tag))
+            mac_verifies[verifier][owner].write(mac_verify(key, message, tag))
+        column = [mac_verifies[verifier][owner].read() for verifier in range(n)]
+        valid_coords[owner].write(
+            _has_strict_majority(_frequency_sum(column, size=size), n)
+        )
 
-    # Each tape runs once and writes only its verifier's column.
-    threads = [MPCThread(verify_shares, 'mac_verify', args=[verifier], single_thread=True)
-               for verifier in range(n)]
+    # Each tape writes its owner's column and strict-majority validity bit.
+    threads = [MPCThread(is_valid_coord, 'is_valid_coord', args=[owner], single_thread=True)
+               for owner in range(n)]
     for thread in threads:
         thread.start()
     for thread in threads:
         thread.join()
-    mac_verifies = [[bit.read() for bit in row] for row in mac_verifies]
+    valid_coords = [bit.read() for bit in valid_coords]
     stop_timer(1)
-
-    # valid_coords[i] == sgf2n(1) iff a majority of entries in mac_verifies[i] equal sgf2n(1)
-    valid_coords = [
-        _has_strict_majority(_frequency_sum(mac_verifies[i], size=size), n) for i in range(n)
-    ]
 
     # reconstruct from lr_shares using only shares projected onto valid_coords
     weights = obliv_interpolation_weights(coords, valid_coords, size=size)
