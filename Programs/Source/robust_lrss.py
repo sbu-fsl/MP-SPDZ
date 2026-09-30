@@ -119,7 +119,7 @@ def robust_lr_rec(
     masks = [mixed_dot(column, weights) for column in zip(*mask_shares_transposed)]
     extractor_outputs = [sdot(seed, src) for src in sources]
     intermediate_shares = [ct[i] + extractor_outputs[i] + masks[i] for i in range(len(ct))]
-    msg = mixed_dot(intermediate_shares)
+    msg = mixed_dot(intermediate_shares, weights)
 
     return msg
 
