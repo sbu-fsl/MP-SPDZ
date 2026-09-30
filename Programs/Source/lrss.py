@@ -100,14 +100,15 @@ def lr_rec(
     if not coords: coords = [cgf2n(i, size=size) for i in range(1, len(shares)+1)]
     weights = interpolation_weights(coords, size=size)
     sources, ct, seed_shares, mask_shares_transposed = zip(*shares)
-    dot = sgf2n.dot_product
+    mixed_dot = lambda x, y : sum(xi * yi for xi, yi in zip(x,y))
+    sdot = sgf2n.dot_product
     # reconstruct seed and masks
-    seed = [dot(column, weights) for column in zip(*seed_shares)]
-    masks = [dot(column, weights) for column in zip(*mask_shares_transposed)]
+    seed = [mixed_dot(column, weights) for column in zip(*seed_shares)]
+    masks = [mixed_dot(column, weights) for column in zip(*mask_shares_transposed)]
     # unmask intermediate shares
-    extractor_outputs = [dot(seed, src) for src in sources]
+    extractor_outputs = [sdot(seed, src) for src in sources]
     intermediate_shares = [ct[i] + extractor_outputs[i] + masks[i] for i in range(len(ct))]
-    msg = dot(intermediate_shares, weights)
+    msg = mixed_dot(intermediate_shares, weights)
     return msg
 
 

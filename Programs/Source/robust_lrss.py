@@ -113,15 +113,13 @@ def robust_lr_rec(
     # reconstruct from lr_shares using only shares projected onto valid_coords
     weights = obliv_interpolation_weights(coords, valid_coords, size=size)
     sources, ct, seed_shares, mask_shares_transposed = zip(*lr_shares)
-
-    def weighted_sum(values):
-        return sum(value * weight for value, weight in zip(values, weights))
-
-    seed = [weighted_sum(column) for column in zip(*seed_shares)]
-    masks = [weighted_sum(column) for column in zip(*mask_shares_transposed)]
-    extractor_outputs = [sgf2n.dot_product(seed, src) for src in sources]
+    mixed_dot = lambda x, y : sum(xi * yi for xi, yi in zip(x,y))
+    sdot = sgf2n.dot_product
+    seed = [mixed_dot(column, weights) for column in zip(*seed_shares)]
+    masks = [mixed_dot(column, weights) for column in zip(*mask_shares_transposed)]
+    extractor_outputs = [sdot(seed, src) for src in sources]
     intermediate_shares = [ct[i] + extractor_outputs[i] + masks[i] for i in range(len(ct))]
-    msg = weighted_sum(intermediate_shares)
+    msg = mixed_dot(intermediate_shares)
 
     return msg
 
