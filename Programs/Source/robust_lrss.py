@@ -70,6 +70,7 @@ def robust_lr_rec(
     strict-majority validity bit.
     '''
 
+    start_timer(21)
     n = len(shares) 
     lr_shares = [s[0] for s in shares]
     pairs = list(product(range(n), repeat=2))
@@ -80,9 +81,10 @@ def robust_lr_rec(
             for verifier, owner in pairs}
     coords = [cgf2n(j, size=size) for j in range(1, n + 1)]
     mac_messages = [[MemValue(x) for x in _parse_mac_message(share)] for share in lr_shares]
+    stop_timer(21)
 
     # Public masked MAC differences: zero means the verifier accepts the owner.
-    start_timer(1)
+    start_timer(22)
     mac_verifies = [[MemValue(cgf2n(0, size=size)) for owner in range(n)]
                     for verifier in range(n)]
     valid_coords = [MemValue(cgf2n(0, size=size)) for owner in range(n)]
@@ -108,8 +110,9 @@ def robust_lr_rec(
     for thread in threads:
         thread.join()
     valid_coords = [bit.read() for bit in valid_coords]
-    stop_timer(1)
+    stop_timer(22)
 
+    start_timer(23)
     # reconstruct from lr_shares using only shares projected onto valid_coords
     weights = obliv_interpolation_weights(coords, valid_coords, size=size)
     sources, ct, seed_shares, mask_shares_transposed = zip(*lr_shares)
@@ -120,7 +123,7 @@ def robust_lr_rec(
     extractor_outputs = [sdot(seed, src) for src in sources]
     intermediate_shares = [ct[i] + extractor_outputs[i] + masks[i] for i in range(len(ct))]
     msg = mixed_dot(intermediate_shares, weights)
-
+    stop_timer(23)
     return msg
 
 

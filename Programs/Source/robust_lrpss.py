@@ -4,7 +4,7 @@ import os, sys
 # add MP-SPDZ dir to path so we can import from Compiler
 sys.path.insert(0, os.path.dirname(sys.argv[0]) + '/../..')
 
-from Compiler.library import listen_for_clients, accept_client_connection, public_input
+from Compiler.library import listen_for_clients, accept_client_connection, public_input, start_timer, stop_timer
 from Compiler.compilerLib import Compiler
 
 from lrss import get_source_length
@@ -53,6 +53,7 @@ def robust_lrpss():
 
     source_length = get_source_length(n, mu, secpar)
 
+    start_timer(11)
     # refresh
     old_shares = []
     base_share_length = 2 * source_length + n + 1
@@ -75,10 +76,17 @@ def robust_lrpss():
                 blocks[base_share_length + 2 * n:],
             )
         )
+    stop_timer(11)
+    start_timer(12)
     secret = robust_lr_rec(old_shares, size=size)
+    stop_timer(12)
+    start_timer(13)
     new_shares = robust_lr_share(secret, t, n, mu, secpar, size=size)
+    stop_timer(13)
 
+    start_timer(14)
     write_shares_to_socket(socket, new_shares)
+    stop_timer(14)
 
 if __name__ == "__main__":
     compiler.compile_func()
