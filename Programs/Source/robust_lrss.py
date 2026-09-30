@@ -3,52 +3,20 @@
 import os
 import sys
 from itertools import product
-from operator import mul
 # add MP-SPDZ dir to path so we can import from Compiler
 sys.path.insert(0, os.path.dirname(sys.argv[0]) + '/../..') 
 from Compiler.library import print_ln, if_e, else_, start_timer, stop_timer
-from Compiler.types import sgf2n, cgf2n, get_sgf2nuint, MemValue, MPCThread
+from Compiler.types import sgf2n, cgf2n, MemValue, MPCThread
 from Compiler.compilerLib import Compiler # only used for testing
-from Compiler.util import tree_reduce
 
 # we assume these modules reside in Programs/Source/
 from lrss import lr_share
-from utils import get_random_sgf2n, mac, mac_verify, obliv_interpolation_weights
+from utils import get_random_sgf2n, mac, obliv_interpolation_weights
 
 
 def _parse_mac_message(share):
     source, ciphertext, seed_share, mask_share = share
     return [*source, ciphertext, *seed_share, *mask_share]
-
-def _has_strict_majority(frequency, num_parties):
-    return frequency >= num_parties // 2 + 1
-
-def _frequency_bit_length(num_parties):
-    # get_sgf2nuint() currently derives from MP-SPDZ's signed bit-integer type,
-    # so the count needs an explicit sign bit.
-    return num_parties.bit_length() + 1
-
-def _frequency_sum(bits, size=1):
-    """Count secret bits with a balanced tree of bounded integer adders.
-
-    Generic sgf2n integer addition uses full-field bitwise AND for carries.
-    Here all operands are known bits, so AND is simply field multiplication.
-    Keep the sign bit required by MP-SPDZ's comparison implementation.
-    """
-    width = _frequency_bit_length(len(bits))
-
-    def add(left, right):
-        carry = 0
-        result = []
-        for a, b in zip(left, right):
-            different = a + b
-            result.append(different + carry)
-            carry = a * b + different * carry
-        return result
-
-    # Explicit secret constants keep 1 + 1 in GF(2), not Python integers.
-    words = [[sgf2n(bit, size=size)] + [0] * (width - 1) for bit in bits]
-    return get_sgf2nuint(width).compose(tree_reduce(add, words))
 
 def robust_lr_share(
         msg: sgf2n,
@@ -98,7 +66,8 @@ def robust_lr_rec(
     Include one share per party, using the layout returned by robust_lr_share.
     Reconstruct using the owners' shares accepted by a strict majority of verifiers.
 
-    MAC checks and the majority predicate run in one MP-SPDZ worker per owner.
+    Each owner's worker reveals masked MAC differences and computes a public
+    strict-majority validity bit.
     '''
 
     n = len(shares) 
@@ -112,23 +81,24 @@ def robust_lr_rec(
     coords = [cgf2n(j, size=size) for j in range(1, n + 1)]
     mac_messages = [[MemValue(x) for x in _parse_mac_message(share)] for share in lr_shares]
 
-    # mac_verifies[verifier][owner] is a secret bit indicating verifier's acceptance
-    # of owner's share
+    # Public masked MAC differences: zero means the verifier accepts the owner.
     start_timer(1)
-    mac_verifies = [[MemValue(sgf2n(0, size=size)) for owner in range(n)]
+    mac_verifies = [[MemValue(cgf2n(0, size=size)) for owner in range(n)]
                     for verifier in range(n)]
-    valid_coords = [MemValue(sgf2n(0, size=size)) for owner in range(n)]
+    valid_coords = [MemValue(cgf2n(0, size=size)) for owner in range(n)]
 
     def is_valid_coord(owner):
         message = [x.read() for x in mac_messages[owner]]
         for verifier in range(n):
             key = tuple(k.read() for k in keys[verifier, owner])
             tag = tags[verifier, owner].read()
-            mac_verifies[verifier][owner].write(mac_verify(key, message, tag))
+            r = get_random_sgf2n(size=size)
+            masked_difference = (mac(key, message) - tag) * r
+            mac_verifies[verifier][owner].write(masked_difference.reveal())
         column = [mac_verifies[verifier][owner].read() for verifier in range(n)]
-        valid_coords[owner].write(
-            _has_strict_majority(_frequency_sum(column, size=size), n)
-        )
+        # cgf2n equality checks the whole field and returns a public regint bit.
+        frequency = sum(entry == 0 for entry in column)
+        valid_coords[owner].write(cgf2n(frequency >= n // 2 + 1, size=size))
 
     # Each tape writes its owner's column and strict-majority validity bit.
     threads = [MPCThread(is_valid_coord, 'is_valid_coord', args=[owner], single_thread=True)
@@ -143,12 +113,15 @@ def robust_lr_rec(
     # reconstruct from lr_shares using only shares projected onto valid_coords
     weights = obliv_interpolation_weights(coords, valid_coords, size=size)
     sources, ct, seed_shares, mask_shares_transposed = zip(*lr_shares)
-    dot = sgf2n.dot_product
-    seed = [dot(column, weights) for column in zip(*seed_shares)]
-    masks = [dot(column, weights) for column in zip(*mask_shares_transposed)]
-    extractor_outputs = [dot(seed, src) for src in sources]
+
+    def weighted_sum(values):
+        return sum(value * weight for value, weight in zip(values, weights))
+
+    seed = [weighted_sum(column) for column in zip(*seed_shares)]
+    masks = [weighted_sum(column) for column in zip(*mask_shares_transposed)]
+    extractor_outputs = [sgf2n.dot_product(seed, src) for src in sources]
     intermediate_shares = [ct[i] + extractor_outputs[i] + masks[i] for i in range(len(ct))]
-    msg = dot(intermediate_shares, weights)
+    msg = weighted_sum(intermediate_shares)
 
     return msg
 
@@ -243,5 +216,43 @@ if __name__ == "__main__":
         @else_
         def _():
             print_ln("✅ TEST 4 PASSED")
+
+        print_ln("-----TEST 5: STRICT MAJORITY BOUNDARY, SIMD-----")
+        # In each lane, reject a different corrupted owner with exactly two
+        # accepting verifiers. Every other owner has exactly three acceptances.
+        for owner in range(4):
+            share, keys, tags = shares[owner]
+            source, ciphertext, seed_shares, mask_shares = share
+            corrupted = [int(lane == owner) for lane in range(size)]
+            share = (source, ciphertext + sgf2n(corrupted), seed_shares, mask_shares)
+            message = _parse_mac_message(share)
+            tags = []
+            for verifier in range(4):
+                mismatch = cgf2n([
+                    int(verifier >= (2 if lane == owner else 3))
+                    for lane in range(size)
+                ])
+                tags.append(mac(shares[verifier][1][owner], message) + mismatch)
+            shares[owner] = (share, keys, tags)
+        rec_msg = robust_lr_rec(shares, size=size)
+        error_pattern = (rec_msg - msg).reveal()
+        @if_e(error_pattern != cgf2n(0))
+        def _():
+            print_ln("❌ TEST 5 FAILED\nreconstructed message=%s\nexpected message=%s", rec_msg.reveal(), msg.reveal())
+        @else_
+        def _():
+            print_ln("✅ TEST 5 PASSED")
+
+        print_ln("-----TEST 6: PUBLIC ZERO CHECK, UPPER FIELD BITS-----")
+        # Zero comparison must inspect the upper half of a 128-bit field too.
+        column = [cgf2n([0, 1 << 64, 1 << 127, 1]), cgf2n([0, 0, 0, 0])]
+        frequency = sum(entry == 0 for entry in column)
+        valid = cgf2n(frequency >= 2, size=4)
+        @if_e(valid != cgf2n([1, 0, 0, 0]))
+        def _():
+            print_ln("❌ TEST 6 FAILED: validity=%s", valid)
+        @else_
+        def _():
+            print_ln("✅ TEST 6 PASSED")
     
     compiler.compile_func()

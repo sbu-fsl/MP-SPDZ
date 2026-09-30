@@ -105,7 +105,7 @@ def interpolate_zero[X,Y: _number](xs: list[X], ys: list[Y], size=1) -> Y:
 def interpolation_weights(
     xs: list,
     size: int=1
-) -> list[sgf2n]:
+) -> list[sgf2n] | list[cgf2n]:
     '''
     Lagrange weights at zero. 
     '''
@@ -126,7 +126,7 @@ def obliv_interpolation_weights(
     xs: list,
     valid_xs: list,
     size: int=1
-) -> list[sgf2n]:
+) -> list[sgf2n] | list[cgf2n]:
     '''
     Lagrange weights at zero, excluding invalid coordinates.
 
@@ -134,7 +134,8 @@ def obliv_interpolation_weights(
     validity bitmap. An invalid coordinate has weight zero.
 
     Inputs must be nonempty and equally sized. Coordinates must be distinct
-    field elements, and validity entries must be secret bits (zero or one).
+    field elements, and validity entries must be public or secret field bits
+    (zero or one). Public validity bits and coordinates produce public weights.
     '''
     assert(len(xs) == len(valid_xs))
     n = len(xs)
