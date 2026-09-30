@@ -102,13 +102,33 @@ def interpolate_zero[X,Y: _number](xs: list[X], ys: list[Y], size=1) -> Y:
         res += ys[i] * prod 
     return res
 
+def interpolation_weights(
+    xs: list,
+    size: int=1
+) -> list[sgf2n]:
+    '''
+    Lagrange weights at zero. 
+    '''
+    n = len(xs)
+    t = type(xs[0])
+    weights = []
+    for i in range(n):
+        factors = []
+        for j in range(n):
+            if j != i:
+                factors.append(xs[j].field_div(xs[j] - xs[i]))
+        weights.append(tree_reduce(mul, factors))
+    return weights
+
+
+
 def obliv_interpolation_weights(
     xs: list,
     valid_xs: list,
     size: int=1
 ) -> list[sgf2n]:
     '''
-    Secret Lagrange weights at zero, excluding invalid coordinates.
+    Lagrange weights at zero, excluding invalid coordinates.
 
     Reuse these weights for different values with the same coordinates and
     validity bitmap. An invalid coordinate has weight zero.

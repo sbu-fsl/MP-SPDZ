@@ -11,7 +11,7 @@ from Compiler.oram import OptimalORAM, AbstractORAM
 
 # we assume these modules reside in Programs/Source/
 from shamir import shamir_share, shamir_reconstruct
-from utils import get_random_sgf2n, poly_eval, mac, mac_verify
+from utils import get_random_sgf2n, poly_eval, interpolation_weights
 
 def get_source_length(
     num_parties: int,
@@ -97,19 +97,17 @@ def lr_rec(
     None, assumes coords = [cgf2n(i) for i in range(1, len(shares)+1)]
     :param size: the usual parallelization parameter
     '''
-    if not coords: coords = [cgf2n(i) for i in range(1, len(shares)+1)]
-    [sources, ct, seed_shares, mask_shares_transposed] = list(map(tuple, zip(*shares)))
-
-    # reconstruct masks and seed
-    mask_shares = list(map(list, zip(*mask_shares_transposed)))
-    masks = [shamir_reconstruct(s, coords, size=size) for s in mask_shares]
-    seed_shares_transposed = list(map(list, zip(*seed_shares)))
-    seed = [shamir_reconstruct(s, coords, size=size) for s in seed_shares_transposed]
-
+    if not coords: coords = [cgf2n(i, size=size) for i in range(1, len(shares)+1)]
+    weights = interpolation_weights(coords, size=size)
+    sources, ct, seed_shares, mask_shares_transposed = zip(*shares)
+    dot = sgf2n.dot_product
+    # reconstruct seed and masks
+    seed = [dot(column, weights) for column in zip(*seed_shares)]
+    masks = [dot(column, weights) for column in zip(*mask_shares_transposed)]
     # unmask intermediate shares
-    ext_outputs = [sum(seed[j] * source[j] for j in range(len(seed))) for source in sources]
-    intermediate_shares = [ct[i] + ext_outputs[i] + masks[i] for i in range(len(ct))]
-    msg = shamir_reconstruct(intermediate_shares, coords, size=size)
+    extractor_outputs = [dot(seed, src) for src in sources]
+    intermediate_shares = [ct[i] + extractor_outputs[i] + masks[i] for i in range(len(ct))]
+    msg = dot(intermediate_shares, weights)
     return msg
 
 
