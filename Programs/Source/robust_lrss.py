@@ -11,7 +11,7 @@ from Compiler.compilerLib import Compiler # only used for testing
 
 # we assume these modules reside in Programs/Source/
 from lrss import lr_share
-from utils import get_random_sgf2n, mac, obliv_interpolation_weights
+from utils import get_random_sgf2n, get_random_sgf2n_pair, mac, obliv_interpolation_weights
 
 
 def _parse_mac_message(share):
@@ -32,21 +32,44 @@ def robust_lr_share(
     Party i receives (lr_shares[i], verification_keys, authentication_tags).
     Its keys authenticate each owner's share; its tags are indexed by verifier.
     '''
+    start_timer(131)
     n = num_parties
     lr_shares = lr_share(msg, threshold, n, mu, secpar, size)
+    stop_timer(131)
+    # Key generation and authentication run together, one tape per owner.
+    start_timer(134)
+    pairs = list(product(range(n), repeat=2))
+    mac_messages = [[MemValue(x) for x in _parse_mac_message(share)]
+                    for share in lr_shares]
     # keys[verifier, owner] authenticates the owner's share to the verifier.
     keys = {
         (verifier, owner): (
-            get_random_sgf2n(size=size),
-            get_random_sgf2n(size=size),
+            MemValue(sgf2n(0, size=size)),
+            MemValue(sgf2n(0, size=size)),
         )
-        for verifier, owner in product(range(n), repeat=2)
+        for verifier, owner in pairs
     }
-    tags = {}
-    for owner, share in enumerate(lr_shares):
-        message = _parse_mac_message(share)
+    tags = {pair: MemValue(sgf2n(0, size=size)) for pair in pairs}
+
+    def authenticate_owner(owner):
+        message = [x.read() for x in mac_messages[owner]]
+        owner_keys = [get_random_sgf2n_pair(size=size) for verifier in range(n)]
         for verifier in range(n):
-            tags[verifier, owner] = mac(keys[verifier, owner], message)
+            key = owner_keys[verifier]
+            for slot, value in zip(keys[verifier, owner], key):
+                slot.write(value)
+            tags[verifier, owner].write(mac(key, message))
+
+    # Workers read shared messages and write disjoint owner columns.
+    threads = [MPCThread(authenticate_owner, 'authenticate_owner', args=[owner],
+                         single_thread=True) for owner in range(n)]
+    for thread in threads:
+        thread.start()
+    for thread in threads:
+        thread.join()
+    keys = {pair: tuple(k.read() for k in keys[pair]) for pair in pairs}
+    tags = {pair: tags[pair].read() for pair in pairs}
+    stop_timer(134)
     return [
         (
             lr_shares[party],
@@ -70,7 +93,7 @@ def robust_lr_rec(
     strict-majority validity bit.
     '''
 
-    start_timer(21)
+    start_timer(121)
     n = len(shares) 
     lr_shares = [s[0] for s in shares]
     pairs = list(product(range(n), repeat=2))
@@ -81,10 +104,10 @@ def robust_lr_rec(
             for verifier, owner in pairs}
     coords = [cgf2n(j, size=size) for j in range(1, n + 1)]
     mac_messages = [[MemValue(x) for x in _parse_mac_message(share)] for share in lr_shares]
-    stop_timer(21)
+    stop_timer(121)
 
     # Public masked MAC differences: zero means the verifier accepts the owner.
-    start_timer(22)
+    start_timer(122)
     mac_verifies = [[MemValue(cgf2n(0, size=size)) for owner in range(n)]
                     for verifier in range(n)]
     valid_coords = [MemValue(cgf2n(0, size=size)) for owner in range(n)]
@@ -110,9 +133,9 @@ def robust_lr_rec(
     for thread in threads:
         thread.join()
     valid_coords = [bit.read() for bit in valid_coords]
-    stop_timer(22)
+    stop_timer(122)
 
-    start_timer(23)
+    start_timer(123)
     # reconstruct from lr_shares using only shares projected onto valid_coords
     weights = obliv_interpolation_weights(coords, valid_coords, size=size)
     sources, ct, seed_shares, mask_shares_transposed = zip(*lr_shares)
@@ -123,7 +146,7 @@ def robust_lr_rec(
     extractor_outputs = [sdot(seed, src) for src in sources]
     intermediate_shares = [ct[i] + extractor_outputs[i] + masks[i] for i in range(len(ct))]
     msg = mixed_dot(intermediate_shares, weights)
-    stop_timer(23)
+    stop_timer(123)
     return msg
 
 
@@ -133,6 +156,18 @@ if __name__ == "__main__":
 
     @compiler.register_function("test_robust_lrss")
     def test_robust_lrss():
+        from Compiler.library import runtime_error_if
+
+        def check_tags(shares, size):
+            # Check every verifier/owner pair and SIMD lane, not just a majority.
+            for owner, (share, _, tags) in enumerate(shares):
+                message = _parse_mac_message(share)
+                for verifier, tag in enumerate(tags):
+                    difference = (mac(shares[verifier][1][owner], message) - tag).reveal()
+                    for lane in range(size):
+                        runtime_error_if(difference[lane] != 0,
+                                         'MAC key/tag layout mismatch')
+
         print_ln("ROBUST LRSS TESTS")
 
         print_ln("-----TEST 1: BASIC-----")
@@ -144,6 +179,7 @@ if __name__ == "__main__":
             mu=1,
             secpar=40,
         )
+        check_tags(shares, 1)
         rec_msg = robust_lr_rec(shares)
         error_pattern = (rec_msg - msg).reveal()
         @if_e(error_pattern != cgf2n(0))
@@ -164,6 +200,7 @@ if __name__ == "__main__":
             secpar=40,
             size=size
         )
+        check_tags(shares, size)
         rec_msg = robust_lr_rec(shares, size=size)
         error_pattern = (rec_msg - msg).reveal()
         @if_e(error_pattern != cgf2n(0))

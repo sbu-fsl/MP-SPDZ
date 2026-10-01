@@ -56,6 +56,16 @@ def get_random_sgf2n(size: int = 1) -> sgf2n:
     # discarded.
     return sgf2n.get_random_triple(size=size)[0]
 
+def get_random_sgf2n_pair(size: int = 1) -> tuple[sgf2n, sgf2n]:
+    '''Sample two independent uniform secret field elements from one triple.
+
+    A fresh multiplication triple has independent random factors a and b.
+    Consume the triple, returning both factors and discarding their product;
+    the triple must not be reused for multiplication.
+    '''
+    a, b, _ = sgf2n.get_random_triple(size=size)
+    return a, b
+
 def poly_eval[S,T: _number](coeffs: list[S], x: T) -> S|T:
     '''
     Use Horner's method to evaluate the polynomial defined by coeffs at the point x.
