@@ -9,7 +9,7 @@ from Compiler.compilerLib import Compiler
 
 from lrss import get_source_length
 from share_io import read_blocks, write_shares_to_socket
-from robust_lrss import robust_lr_rec, robust_lr_share
+from robust_lrss import robust_lr_rec, robust_lr_share, get_mac_repetitions
 
 usage = "usage: %prog [options] [args]"
 compiler = Compiler(usage=usage)
@@ -57,10 +57,11 @@ def robust_lrpss():
     # refresh
     old_shares = []
     base_share_length = 2 * source_length + n + 1
+    c = get_mac_repetitions(t, base_share_length, mu, secpar)
     for i in range(n):
-        blocks = read_blocks(i, base_share_length + 3 * n, size)
+        blocks = read_blocks(i, base_share_length + 3 * n * c, size)
         lrss_blocks = blocks[:base_share_length]
-        mac_key_blocks = blocks[base_share_length:base_share_length + 2 * n]
+        mac_key_blocks = blocks[base_share_length:base_share_length + 2 * n * c]
         old_shares.append(
             (
                 (
@@ -70,10 +71,13 @@ def robust_lrpss():
                     lrss_blocks[2 * source_length + 1:],
                 ),
                 [
-                    tuple(mac_key_blocks[j:j + 2])
-                    for j in range(0, 2 * n, 2)
+                    [tuple(mac_key_blocks[j:j + 2])
+                     for j in range(2 * owner * c, 2 * (owner + 1) * c, 2)]
+                    for owner in range(n)
                 ],
-                blocks[base_share_length + 2 * n:],
+                [blocks[base_share_length + 2 * n * c + verifier * c:
+                        base_share_length + 2 * n * c + (verifier + 1) * c]
+                 for verifier in range(n)],
             )
         )
     stop_timer(11)

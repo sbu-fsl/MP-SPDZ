@@ -215,6 +215,7 @@ def dot_product_random_preimage(
 def mac(key: tuple[sgf2n, sgf2n], msg: list[sgf2n]) -> sgf2n:
     '''
     One-time MAC from polynomial hashing with logarithmic multiplication depth.
+    Probability of forgery is bounded by len(msg) / size_of_field.
 
     :param key: a tuple (a,b) 
     :param msg: a list of sgf2n

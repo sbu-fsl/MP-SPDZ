@@ -1,6 +1,7 @@
 #!/usr/bin/env python3
 
 import os
+from math import ceil, log2, log1p, log
 import sys
 from itertools import product
 # add MP-SPDZ dir to path so we can import from Compiler
@@ -12,6 +13,24 @@ from Compiler.compilerLib import Compiler # only used for testing
 # we assume these modules reside in Programs/Source/
 from lrss import lr_share
 from utils import get_random_sgf2n, get_random_sgf2n_pair, mac, obliv_interpolation_weights
+
+
+def get_mac_repetitions(threshold, message_length, mu, secpar):
+    """Minimal concatenation count for the 128-bit polynomial MAC.
+
+    impl.tex (leakage-resilient MAC compiler) bounds failure by
+    t(t+1) * 2**mu * (ell / 2**128)**c. secpar targets both robustness
+    and LRSS statistical security; ell is the flattened LRSS share length.
+    """
+    if threshold <= 0:
+        raise ValueError("threshold must be positive")
+    if not 1 <= message_length < 2**128:
+        raise ValueError("message_length must satisfy 1 <= ell < 2**128")
+    # Avoid cancellation/rounding to zero for ell close to 2**128.
+    denominator = (128 - log2(message_length) if message_length <= 2**127
+                   else -log1p(-(2**128 - message_length) / 2**128) / log(2))
+    return max(1, ceil((secpar + log2(threshold * (threshold + 1)) + mu)
+                       / denominator))
 
 
 def _parse_mac_message(share):
@@ -31,10 +50,13 @@ def robust_lr_share(
 
     Party i receives (lr_shares[i], verification_keys, authentication_tags).
     Its keys authenticate each owner's share; its tags are indexed by verifier.
+    Each key entry contains c independent pairs and each tag entry c components,
+    even when c == 1. secpar targets both statistical security and robustness.
     '''
     start_timer(131)
     n = num_parties
     lr_shares = lr_share(msg, threshold, n, mu, secpar, size)
+    c = get_mac_repetitions(threshold, len(_parse_mac_message(lr_shares[0])), mu, secpar)
     stop_timer(131)
     # Key generation and authentication run together, one tape per owner.
     start_timer(134)
@@ -43,22 +65,22 @@ def robust_lr_share(
                     for share in lr_shares]
     # keys[verifier, owner] authenticates the owner's share to the verifier.
     keys = {
-        (verifier, owner): (
+        (verifier, owner): [(
             MemValue(sgf2n(0, size=size)),
             MemValue(sgf2n(0, size=size)),
-        )
+        ) for _ in range(c)]
         for verifier, owner in pairs
     }
-    tags = {pair: MemValue(sgf2n(0, size=size)) for pair in pairs}
+    tags = {pair: [MemValue(sgf2n(0, size=size)) for _ in range(c)] for pair in pairs}
 
     def authenticate_owner(owner):
         message = [x.read() for x in mac_messages[owner]]
-        owner_keys = [get_random_sgf2n_pair(size=size) for verifier in range(n)]
         for verifier in range(n):
-            key = owner_keys[verifier]
-            for slot, value in zip(keys[verifier, owner], key):
-                slot.write(value)
-            tags[verifier, owner].write(mac(key, message))
+            for repetition in range(c):
+                key = get_random_sgf2n_pair(size=size)
+                for slot, value in zip(keys[verifier, owner][repetition], key):
+                    slot.write(value)
+                tags[verifier, owner][repetition].write(mac(key, message))
 
     # Workers read shared messages and write disjoint owner columns.
     threads = [MPCThread(authenticate_owner, 'authenticate_owner', args=[owner],
@@ -67,8 +89,8 @@ def robust_lr_share(
         thread.start()
     for thread in threads:
         thread.join()
-    keys = {pair: tuple(k.read() for k in keys[pair]) for pair in pairs}
-    tags = {pair: tags[pair].read() for pair in pairs}
+    keys = {pair: [tuple(k.read() for k in key) for key in keys[pair]] for pair in pairs}
+    tags = {pair: [tag.read() for tag in tags[pair]] for pair in pairs}
     stop_timer(134)
     return [
         (
@@ -93,20 +115,37 @@ def robust_lr_rec(
     strict-majority validity bit.
     '''
 
+    # Validate before creating tapes; zip must never hide missing components.
+    if not shares:
+        raise ValueError("at least one robust share is required")
+    n = len(shares)
+    c = None
+    for _, owner_keys, verifier_tags in shares:
+        if len(owner_keys) != n or len(verifier_tags) != n:
+            raise ValueError("each share requires n key lists and n tag lists")
+        for keys_for_owner, tags_for_verifier in zip(owner_keys, verifier_tags):
+            if c is None:
+                c = len(keys_for_owner)
+            if not c or len(keys_for_owner) != c or len(tags_for_verifier) != c:
+                raise ValueError("all key/tag lists require the same positive repetition count")
+            if any(len(key) != 2 for key in keys_for_owner):
+                raise ValueError("each MAC key must be an (alpha, beta) pair")
+
     start_timer(121)
     n = len(shares) 
     lr_shares = [s[0] for s in shares]
     pairs = list(product(range(n), repeat=2))
     # MemValue shares scalar or SIMD values between MP-SPDZ threads.
-    keys = {(verifier, owner): tuple(MemValue(k) for k in shares[verifier][1][owner])
+    keys = {(verifier, owner): [tuple(MemValue(k) for k in key)
+                              for key in shares[verifier][1][owner]]
             for verifier, owner in pairs}
-    tags = {(verifier, owner): MemValue(shares[owner][2][verifier])
+    tags = {(verifier, owner): [MemValue(tag) for tag in shares[owner][2][verifier]]
             for verifier, owner in pairs}
     coords = [cgf2n(j, size=size) for j in range(1, n + 1)]
     mac_messages = [[MemValue(x) for x in _parse_mac_message(share)] for share in lr_shares]
     stop_timer(121)
 
-    # Public masked MAC differences: zero means the verifier accepts the owner.
+    # One public acceptance bit per verifier/owner, after all zero checks.
     start_timer(122)
     mac_verifies = [[MemValue(cgf2n(0, size=size)) for owner in range(n)]
                     for verifier in range(n)]
@@ -115,14 +154,17 @@ def robust_lr_rec(
     def is_valid_coord(owner):
         message = [x.read() for x in mac_messages[owner]]
         for verifier in range(n):
-            key = tuple(k.read() for k in keys[verifier, owner])
-            tag = tags[verifier, owner].read()
-            r = get_random_sgf2n(size=size)
-            masked_difference = (mac(key, message) - tag) * r
-            mac_verifies[verifier][owner].write(masked_difference.reveal())
+            accepted = 1
+            for repetition in range(c):
+                key = tuple(k.read() for k in keys[verifier, owner][repetition])
+                tag = tags[verifier, owner][repetition].read()
+                r = get_random_sgf2n(size=size)
+                masked_difference = (mac(key, message) - tag) * r
+                # Equality yields a public regint bit in each SIMD lane.
+                accepted = accepted * (masked_difference.reveal() == 0)
+            mac_verifies[verifier][owner].write(cgf2n(accepted, size=size))
         column = [mac_verifies[verifier][owner].read() for verifier in range(n)]
-        # cgf2n equality checks the whole field and returns a public regint bit.
-        frequency = sum(entry == 0 for entry in column)
+        frequency = sum(entry == 1 for entry in column)
         valid_coords[owner].write(cgf2n(frequency >= n // 2 + 1, size=size))
 
     # Each tape writes its owner's column and strict-majority validity bit.
@@ -162,11 +204,12 @@ if __name__ == "__main__":
             # Check every verifier/owner pair and SIMD lane, not just a majority.
             for owner, (share, _, tags) in enumerate(shares):
                 message = _parse_mac_message(share)
-                for verifier, tag in enumerate(tags):
-                    difference = (mac(shares[verifier][1][owner], message) - tag).reveal()
-                    for lane in range(size):
-                        runtime_error_if(difference[lane] != 0,
-                                         'MAC key/tag layout mismatch')
+                for verifier, components in enumerate(tags):
+                    for key, tag in zip(shares[verifier][1][owner], components):
+                        difference = (mac(key, message) - tag).reveal()
+                        for lane in range(size):
+                            runtime_error_if(difference[lane] != 0,
+                                             'MAC key/tag layout mismatch')
 
         print_ln("ROBUST LRSS TESTS")
 
@@ -217,14 +260,14 @@ if __name__ == "__main__":
             threshold=1,
             num_parties=3,
             mu=1,
-            secpar=40,
+            secpar=128,
         )
         lr_share_to_corrupt, keys, tags = shares[0]
         source, ciphertext, seed_shares, mask_shares = lr_share_to_corrupt
         shares[0] = (
             (source, ciphertext + sgf2n(1), seed_shares, mask_shares),
             keys,
-            [tag + sgf2n(1) for tag in tags],
+            [[tag + sgf2n(1) for tag in components] for components in tags],
         )
         rec_msg = robust_lr_rec(shares)
         error_pattern = (rec_msg - msg).reveal()
@@ -243,9 +286,10 @@ if __name__ == "__main__":
             threshold=1,
             num_parties=4,
             mu=1,
-            secpar=40,
+            secpar=128,
             size=size,
         )
+        check_tags(shares, size)
         rec_msg = robust_lr_rec(shares, size=size)
         error_pattern = (rec_msg - msg).reveal()
         @if_e(error_pattern != cgf2n(0))
@@ -270,7 +314,13 @@ if __name__ == "__main__":
                     int(verifier >= (2 if lane == owner else 3))
                     for lane in range(size)
                 ])
-                tags.append(mac(shares[verifier][1][owner], message) + mismatch)
+                tags.append([
+                    mac(key, message) + mismatch * cgf2n([
+                        int(lane % len(shares[verifier][1][owner]) == repetition)
+                        for lane in range(size)
+                    ])
+                    for repetition, key in enumerate(shares[verifier][1][owner])
+                ])
             shares[owner] = (share, keys, tags)
         rec_msg = robust_lr_rec(shares, size=size)
         error_pattern = (rec_msg - msg).reveal()
@@ -280,6 +330,28 @@ if __name__ == "__main__":
         @else_
         def _():
             print_ln("✅ TEST 5 PASSED")
+
+        print_ln("-----TEST 7: SINGLE COMPONENT CORRUPTION, SCALAR-----")
+        msg_scalar = sgf2n(42)
+        scalar_shares = robust_lr_share(msg_scalar, 1, 3, 1, 128)
+        c = len(scalar_shares[0][1][0])
+        assert c > 1
+        for repetition in (0, c - 1):
+            corrupted_shares = list(scalar_shares)
+            share, keys, _ = scalar_shares[0]
+            source, ciphertext, seed, masks = share
+            share = (source, ciphertext + sgf2n(1), seed, masks)
+            message = _parse_mac_message(share)
+            tags = [
+                [mac(key, message) + int(r == repetition)
+                 for r, key in enumerate(scalar_shares[verifier][1][0])]
+                for verifier in range(3)
+            ]
+            corrupted_shares[0] = (share, keys, tags)
+            result = robust_lr_rec(corrupted_shares)
+            runtime_error_if((result - msg_scalar).reveal() != 0,
+                             'Single component corruption was accepted')
+        print_ln("TEST 7 PASSED")
 
         print_ln("-----TEST 6: PUBLIC ZERO CHECK, UPPER FIELD BITS-----")
         # Zero comparison must inspect the upper half of a 128-bit field too.
