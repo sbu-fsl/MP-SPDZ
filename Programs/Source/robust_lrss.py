@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 
 import os
-from math import ceil, log2, log1p, log
+from math import ceil, log2
 import sys
 from itertools import product
 # add MP-SPDZ dir to path so we can import from Compiler
@@ -22,13 +22,7 @@ def get_mac_repetitions(threshold, message_length, mu, secpar):
     t(t+1) * 2**mu * (ell / 2**128)**c. secpar targets both robustness
     and LRSS statistical security; ell is the flattened LRSS share length.
     """
-    if threshold <= 0:
-        raise ValueError("threshold must be positive")
-    if not 1 <= message_length < 2**128:
-        raise ValueError("message_length must satisfy 1 <= ell < 2**128")
-    # Avoid cancellation/rounding to zero for ell close to 2**128.
-    denominator = (128 - log2(message_length) if message_length <= 2**127
-                   else -log1p(-(2**128 - message_length) / 2**128) / log(2))
+    denominator = 128 - log2(message_length)
     return max(1, ceil((secpar + log2(threshold * (threshold + 1)) + mu)
                        / denominator))
 
