@@ -145,7 +145,11 @@ $(LIBRELEASE): Protocols/MalRepRingOptions.o $(PROCESSOR) $(COMMONOBJS) $(TINIER
 	$(AR) -csr $@ $^
 
 CFLAGS += -fPIC
+ifeq ($(OS), Linux)
+LDLIBS += -Wl,-rpath,'$$ORIGIN'
+else
 LDLIBS += -Wl,-rpath -Wl,$(CURDIR)
+endif
 
 $(SHAREDLIB): $(PROCESSOR) $(COMMONOBJS) GC/square64.o GC/Instruction.o
 	$(CXX) $(CFLAGS) -shared -o $@ $^ $(LDLIBS)

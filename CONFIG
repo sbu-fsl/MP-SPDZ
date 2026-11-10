@@ -87,7 +87,14 @@ endif
 
 LDLIBS = -lgmpxx -lgmp -lsodium $(MY_LDLIBS)
 LDLIBS += $(BREW_LDLIBS)
-LDLIBS +=  -Wl,-rpath -Wl,$(CURDIR)/local/lib -L$(CURDIR)/local/lib
+# Keep Linux binaries relocatable. Single quotes protect the loader token from
+# the shell; doubling the dollar sign protects it from make expansion.
+ifeq ($(OS), Linux)
+LDLIBS += -Wl,-rpath,'$$ORIGIN/local/lib'
+else
+LDLIBS += -Wl,-rpath -Wl,$(CURDIR)/local/lib
+endif
+LDLIBS += -L$(CURDIR)/local/lib
 LDLIBS += -lssl -lcrypto
 LDLIBS += -lboost_filesystem -lboost_iostreams
 
