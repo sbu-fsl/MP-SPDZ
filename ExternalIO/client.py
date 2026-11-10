@@ -1,8 +1,9 @@
 import platform
-import socket, ssl
+import socket, ssl, os
 import struct
 import time
-from domains import *
+from .domains import *
+
 
 # The following function is either taken directly or derived from:
 # https://stackoverflow.com/questions/12248132/how-to-change-tcp-keepalive-timer-using-python-script
@@ -38,14 +39,15 @@ class Client:
     :param port_base: port number for first hostname,
       increases by one for every additional hostname
     :param my_client_id: number to identify client
+    :param cert_ca_path: path of single directory containing certificates and keys.
 
     """
-    def __init__(self, hostnames, port_base, my_client_id):
+    def __init__(self, hostnames, port_base, my_client_id, cert_ca_path):
         ctx = ssl.SSLContext(ssl.PROTOCOL_TLSv1_2)
         name = 'C%d' % my_client_id
-        prefix = 'Player-Data/%s' % name
+        prefix = os.path.join(cert_ca_path, name)
         ctx.load_cert_chain(certfile=prefix + '.pem', keyfile=prefix + '.key')
-        ctx.load_verify_locations(capath='Player-Data')
+        ctx.load_verify_locations(capath=cert_ca_path)
 
         self.sockets = []
         for i, hostname in enumerate(hostnames):
@@ -85,6 +87,19 @@ class Client:
             self.clear_domain = self.domain
         else:
             raise Exception('invalid type')
+        
+    def close(self):
+        """Close all underlying SSL/TCP sockets held by this client."""
+        for sock in self.sockets:
+            try:
+                sock.shutdown(socket.SHUT_RDWR) # polite shutdown first, may raise if socket already closed
+                sock.close()
+                # close underlying plain socket to avoid file descriptor leak in performance sensitive applications
+                if hasattr(sock, "_sslobj") and hasattr(sock, "_sock"): 
+                    sock._sock.close()
+            except Exception:
+                pass
+        self.sockets = []
 
     def receive_triples(self, T, n):
         triples = [[0, 0, 0] for i in range(n)]
@@ -168,6 +183,18 @@ class Client:
         assert len(os) % self.domain.size() == 0
         return [int(os.get(self.domain))
                 for i in range(len(os) // self.domain.size())]
+
+    def receive_plain_ints(self, socket=None):
+        """Receive clear 64-bit integers from a single server."""
+        if socket is None:
+            if len(self.sockets) != 1:
+                raise Exception('need to specify socket')
+            socket = self.sockets[0]
+        os = octetStream()
+        os.Receive(socket)
+        if len(os) % 8:
+            raise ValueError('invalid integer output length')
+        return [os.get_int(8) for _ in range(len(os) // 8)]
 
 class octetStream:
     def __init__(self, value=None):
