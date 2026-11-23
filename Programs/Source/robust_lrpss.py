@@ -62,14 +62,18 @@ def robust_lrpss():
     tags_end = keys_end + n * c
     key_count = n * n * c
     new_key_blocks = [0] * (2 * key_count)
+    new_keys_end = tags_end + len(new_key_blocks)
+    output_length = base_share_length + 3 * n * c
+    output_masks = []
     for i in range(n):
-        blocks = read_blocks(i, tags_end + len(new_key_blocks), size)
+        blocks = read_blocks(i, new_keys_end + output_length, size)
         lrss_blocks = blocks[:base_share_length]
         mac_key_blocks = blocks[base_share_length:keys_end]
         tag_blocks = blocks[keys_end:tags_end]
         # Field addition is XOR. One independent honest contribution makes the
         # sum uniform, with every summand kept secret inside MPC.
-        new_key_blocks = [total + value for total, value in zip(new_key_blocks, blocks[tags_end:])]
+        new_key_blocks = [total + value for total, value in zip(new_key_blocks, blocks[tags_end:new_keys_end])]
+        output_masks.append(blocks[new_keys_end:])
         old_shares.append(
             (
                 (
@@ -99,7 +103,7 @@ def robust_lrpss():
     stop_timer(13)
 
     start_timer(14)
-    write_shares_to_socket(socket, new_shares)
+    write_shares_to_socket(socket, new_shares, output_masks=output_masks)
     stop_timer(14)
 
 if __name__ == "__main__":

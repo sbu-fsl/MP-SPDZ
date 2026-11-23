@@ -26,16 +26,18 @@ def flatten_share(share):
     return [share]
 
 
-def reveal_and_encode_share(share, party):
-    """Reveal one share to its owner and encode it for socket output.
+def reveal_and_encode_share(share, party, *, output_masks=None):
+    """Encode a share for socket output using runtime or recipient masks.
 
     Each GF(2^128) block is emitted as four unsigned 32-bit values, least
     significant part first. Blocks and SIMD lanes retain the order produced by
-    ``flatten_share()``.
+    ``flatten_share()``. A recipient who supplies masks removes them after
+    reading the socket output.
     """
     blocks = flatten_share(share)
     if not blocks:
         raise ValueError("cannot encode an empty share")
+    masks = [None] * len(blocks) if output_masks is None else output_masks
 
     # Stage each word in memory to avoid concat's per-lane register expansion.
     # Socket writes interleave vectors lane-first, so four block-major word
@@ -51,14 +53,19 @@ def reveal_and_encode_share(share, party):
     program.open_memory_scope(reveal_and_encode_share)
     try:
         offset = 0
-        for block in blocks:
-            # reveal_to() does not propagate vector size to its mask allocation.
-            secret_mask, clear_mask = sgf2n.get_random_input_mask_for(
-                party, size=block.size
-            )
-            revealed = personal(
-                party, (block + secret_mask).reveal() - clear_mask
-            )._v
+        for block, mask in zip(blocks, masks, strict=True):
+            if mask is None:
+                # reveal_to() does not propagate vector size to its mask allocation.
+                secret_mask, clear_mask = sgf2n.get_random_input_mask_for(
+                    party, size=block.size
+                )
+                revealed = personal(
+                    party, (block + secret_mask).reveal() - clear_mask
+                )._v
+            else:
+                if mask.size != block.size:
+                    raise ValueError("output mask and share block must have the same SIMD size")
+                revealed = (block + mask).reveal()
             for word, shift in zip(words, range(0, GF2N_BITS, OUTPUT_VALUE_BITS)):
                 word.assign_vector((revealed >> shift) & OUTPUT_VALUE_MASK, offset)
             offset += block.size
@@ -71,10 +78,13 @@ def reveal_and_encode_share(share, party):
     return output
 
 
-def write_shares_to_socket(socket, shares):
-    """Reveal and write each share only to the client that owns it."""
+def write_shares_to_socket(socket, shares, *, output_masks=None):
+    """Write each recipient's share, optionally masked, to its own socket."""
+    if output_masks is not None and len(output_masks) != len(shares):
+        raise ValueError("output masks must be supplied for every share")
     for party, share in enumerate(shares):
-        output = reveal_and_encode_share(share, party)
+        masks = None if output_masks is None else output_masks[party]
+        output = reveal_and_encode_share(share, party, output_masks=masks)
 
         @if_(party == socket)
         def _():
