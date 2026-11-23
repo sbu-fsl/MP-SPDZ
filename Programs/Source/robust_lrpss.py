@@ -54,14 +54,22 @@ def robust_lrpss():
     source_length = get_source_length(n, mu, secpar)
 
     start_timer(11)
-    # refresh
     old_shares = []
     base_share_length = 2 * source_length + n + 1
     c = get_mac_repetitions(t, base_share_length, mu, secpar)
+    key_length = base_share_length + 1
+    keys_end = base_share_length + n * c * key_length
+    tags_end = keys_end + n * c
+    key_count = n * n * c
+    new_key_blocks = [0] * (2 * key_count)
     for i in range(n):
-        blocks = read_blocks(i, base_share_length + 3 * n * c, size)
+        blocks = read_blocks(i, tags_end + len(new_key_blocks), size)
         lrss_blocks = blocks[:base_share_length]
-        mac_key_blocks = blocks[base_share_length:base_share_length + 2 * n * c]
+        mac_key_blocks = blocks[base_share_length:keys_end]
+        tag_blocks = blocks[keys_end:tags_end]
+        # Field addition is XOR. One independent honest contribution makes the
+        # sum uniform, with every summand kept secret inside MPC.
+        new_key_blocks = [total + value for total, value in zip(new_key_blocks, blocks[tags_end:])]
         old_shares.append(
             (
                 (
@@ -71,21 +79,26 @@ def robust_lrpss():
                     lrss_blocks[2 * source_length + 1:],
                 ),
                 [
-                    [tuple(mac_key_blocks[j:j + 2])
-                     for j in range(2 * owner * c, 2 * (owner + 1) * c, 2)]
+                    [tuple(mac_key_blocks[j:j + key_length])
+                     for j in range(owner * c * key_length, (owner + 1) * c * key_length, key_length)]
                     for owner in range(n)
                 ],
-                [blocks[base_share_length + 2 * n * c + verifier * c:
-                        base_share_length + 2 * n * c + (verifier + 1) * c]
+                [tag_blocks[verifier * c:(verifier + 1) * c]
                  for verifier in range(n)],
             )
         )
     stop_timer(11)
     start_timer(12)
-    secret = robust_lr_rec(old_shares, size=size)
+    # Each malformed vector passes one independent check with probability 2^-128.
+    # Account for all vectors across the batch and the configured leakage budget.
+    check_bits = secpar + mu + (key_count * size - 1).bit_length()
+    secret = robust_lr_rec(old_shares, size=size, expanded_key_checks=(check_bits + 127) // 128)
     stop_timer(12)
     start_timer(13)
-    new_shares = robust_lr_share(secret, t, n, mu, secpar, size=size)
+    key_blocks = iter(new_key_blocks)
+    new_keys = {(verifier, owner): [(next(key_blocks), next(key_blocks)) for _ in range(c)]
+                for verifier in range(n) for owner in range(n)}
+    new_shares = robust_lr_share(secret, t, n, mu, secpar, size=size, mac_keys=new_keys)
     stop_timer(13)
 
     start_timer(14)

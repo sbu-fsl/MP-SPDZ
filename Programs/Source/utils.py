@@ -223,6 +223,12 @@ def mac(key: tuple[sgf2n, sgf2n], msg: list[sgf2n]) -> sgf2n:
     a, b = key
     return poly_eval_balanced([a] + msg, b)
 
+def mac_expanded(key: tuple[sgf2n, ...], msg: list[sgf2n]) -> sgf2n:
+    """Evaluate the polynomial MAC with an expanded key (a, b, ..., b**len(msg))."""
+    a, *powers = key
+    assert len(powers) == len(msg)
+    return a + sgf2n.dot_product(msg, powers)
+
 def mac_verify(key: tuple[sgf2n, sgf2n], msg:list[sgf2n], tag: sgf2n) -> sgf2n:
     '''
     Canonical MAC verification. Outputs sgf2n(1) if tag verifies, else sgf2n(0).
