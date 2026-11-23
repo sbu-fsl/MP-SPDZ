@@ -7,7 +7,7 @@ from itertools import product
 # add MP-SPDZ dir to path so we can import from Compiler
 sys.path.insert(0, os.path.dirname(sys.argv[0]) + '/../..') 
 from Compiler.library import print_ln, if_e, else_, start_timer, stop_timer
-from Compiler.types import sgf2n, cgf2n, MemValue, MPCThread, set_instruction_type
+from Compiler.types import sgf2n, cgf2n, MemValue, MPCThread
 from Compiler.compilerLib import Compiler # only used for testing
 
 # we assume these modules reside in Programs/Source/
@@ -108,14 +108,14 @@ def robust_lr_rec(
         shares: list[tuple],
         size: int=1,
         *,
-        expanded_key_checks: int = 0,
+        expanded_keys: bool = False,
 ) -> sgf2n:
     '''
     Reconstruct from a nonempty list of robust shares in original party order.
 
     Include one share per party, using the layout returned by robust_lr_share.
-    With expanded_key_checks > 0, keys contain a followed by b through b**ell,
-    and the input phase must be complete before generating the challenges.
+    With expanded_keys=True, keys contain a followed by ell coefficients,
+    which are used directly in the MAC dot product.
     Reconstruct using the owners' shares accepted by a strict majority of verifiers.
 
     Each owner's worker reveals masked MAC differences and computes a public
@@ -127,7 +127,8 @@ def robust_lr_rec(
         raise ValueError("at least one robust share is required")
     n = len(shares)
     message_length = len(_parse_mac_message(shares[0][0]))
-    key_length = message_length + 1 if expanded_key_checks else 2
+    key_length = message_length + 1 if expanded_keys else 2
+    compute_mac = mac_expanded if expanded_keys else mac
     c = None
     for _, owner_keys, verifier_tags in shares:
         if len(owner_keys) != n or len(verifier_tags) != n:
@@ -152,14 +153,6 @@ def robust_lr_rec(
             for verifier, owner in pairs}
     coords = [cgf2n(j, size=size) for j in range(1, n + 1)]
     mac_messages = [[MemValue(x) for x in _parse_mac_message(share)] for share in lr_shares]
-    # Sample after private input. Each independent row compresses all the
-    # recurrence checks to one secret multiplication per key and lane.
-    expand_coefficient = set_instruction_type(cgf2n.expand_to_vector)
-    challenges = [
-        [MemValue(expand_coefficient(get_random_sgf2n().reveal(), size))
-         for _ in range(message_length - 1)]
-        for _ in range(expanded_key_checks)
-    ]
     stop_timer(121)
 
     # One public acceptance bit per verifier/owner, after all zero checks.
@@ -170,29 +163,13 @@ def robust_lr_rec(
 
     def is_valid_coord(owner):
         message = [x.read() for x in mac_messages[owner]]
-        coefficients = [[value.read() for value in row] for row in challenges]
         for verifier in range(n):
             accepted = 1
             for repetition in range(c):
                 key = tuple(k.read() for k in keys[verifier, owner][repetition])
                 tag = tags[verifier, owner][repetition].read()
                 r = get_random_sgf2n(size=size)
-                if coefficients:
-                    masked_difference = (mac_expanded(key, message) - tag) * r
-                    consistent = 1
-                    for row in coefficients:
-                        lower = sum(value * weight for value, weight in zip(key[1:-1], row))
-                        upper = sum(value * weight for value, weight in zip(key[2:], row))
-                        # Honest inputs give zero. A malformed vector belongs to
-                        # its submitting verifier, so the residual reveals no
-                        # other party's data.
-                        residual = key[1] * lower - upper
-                        consistent *= residual.reveal() == 0
-                    # Suppress the MAC opening for a malformed key in this lane.
-                    masked_difference *= cgf2n(consistent, size=size)
-                    accepted *= consistent
-                else:
-                    masked_difference = (mac(key, message) - tag) * r
+                masked_difference = (compute_mac(key, message) - tag) * r
                 # Equality yields a public regint bit in each SIMD lane.
                 accepted = accepted * (masked_difference.reveal() == 0)
             mac_verifies[verifier][owner].write(cgf2n(accepted, size=size))

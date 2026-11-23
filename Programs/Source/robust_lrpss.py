@@ -89,10 +89,7 @@ def robust_lrpss():
         )
     stop_timer(11)
     start_timer(12)
-    # Each malformed vector passes one independent check with probability 2^-128.
-    # Account for all vectors across the batch and the configured leakage budget.
-    check_bits = secpar + mu + (key_count * size - 1).bit_length()
-    secret = robust_lr_rec(old_shares, size=size, expanded_key_checks=(check_bits + 127) // 128)
+    secret = robust_lr_rec(old_shares, size=size, expanded_keys=True)
     stop_timer(12)
     start_timer(13)
     key_blocks = iter(new_key_blocks)
