@@ -17,8 +17,6 @@
 #include <map>
 #include <vector>
 
-#define N_AMPLIFY 3
-
 template <class T, int N>
 class ShareTriple;
 template <class T, int N>
@@ -56,8 +54,12 @@ class OTTripleGenerator : public GeneratorThread
 
     template<class> friend class OTTripleGenerator;
 
+    static const int MAX_AMPLIFY = 4;
+
 protected:
     static complete_mac_key_type mac_key;
+
+    complete_mac_key_type local_mac_key;
 
     //OTTripleSetup* setup;
     Player& globalPlayer;
@@ -82,7 +84,7 @@ protected:
 
 public:
     // TwoPartyPlayer's for OTs, n-party Player for sacrificing
-    vector<TwoPartyPlayer*> players;
+    vector<VirtualTwoPartyPlayer*> players;
     vector<typename T::Multiplier*> ot_multipliers;
     //vector<OTMachine*> machines;
     BitVector baseReceiverInput; // same for every set of OTs
@@ -102,14 +104,14 @@ public:
 
     MascotParams& machine;
 
-    vector<PlainTriple<open_type, N_AMPLIFY>> preampTriples;
+    vector<PlainTriple<open_type, MAX_AMPLIFY>> preampTriples;
     vector<array<open_type, 3>> plainTriples;
     vector<dabit<T>> plainBits;
     vector<array<open_type, 3>> mixedTriples;
 
     typename T::MAC_Check* MC;
 
-    static complete_mac_key_type& get_mac_key() { return mac_key; }
+    const complete_mac_key_type& get_mac_key() const { return local_mac_key; }
     static mac_key_type get_mac_key(Player& P, bool = false);
     static void reset_mac_key();
 
@@ -118,7 +120,7 @@ public:
             Player* parentPlayer = 0);
     ~OTTripleGenerator();
 
-    void set_batch_size(int nTriples);
+    void set_batch_size(int nTriples, bool limit = true);
 
     void generate() { throw not_implemented(); }
 
@@ -163,7 +165,7 @@ class SimpleMascotTripleGenerator : public NPartyTripleGenerator<T>
     typedef typename T::mac_key_type mac_key_type;
     typedef typename T::MAC_Check MAC_Check;
 
-    virtual void sacrifice(typename T::MAC_Check&, PRNG&) { throw not_implemented(); }
+    virtual void sacrifice(typename T::MAC_Check&) { throw not_implemented(); }
 
 public:
     vector< ShareTriple<T, 2> > uncheckedTriples;
@@ -190,7 +192,7 @@ class MascotTripleGenerator : public SimpleMascotTripleGenerator<T>
     template <class U>
     void generateBitsFromTriples(MAC_Check& MC, ofstream& outputFile, U);
 
-    void sacrifice(typename T::MAC_Check& MC, PRNG& G);
+    void sacrifice(typename T::MAC_Check& MC);
 
 public:
     vector<T> bits;
@@ -210,7 +212,7 @@ class Spdz2kTripleGenerator : public NPartyTripleGenerator<T>
     void generateBits() { throw not_implemented(); }
 
     template<class U>
-    void sacrificeZ2k(U& MC, PRNG& G);
+    void sacrificeZ2k(U& MC);
 
 public:
     vector< ShareTriple<Share<sacri_type>, 2> > uncheckedTriples;

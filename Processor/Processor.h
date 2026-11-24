@@ -55,6 +55,8 @@ class SubProcessor
   typedef typename T::bit_type::part_type BT;
 
   typedef typename T::Protocol::Shuffler::store_type ShuffleStore;
+  typedef ShuffleTuple<
+      typename T::Protocol::Shuffler::shuffle_type> shuffle_tuple_type;
 
 public:
   ArithmeticProcessor* Proc;
@@ -86,6 +88,7 @@ public:
 
   void muls(const ArgVector& reg);
   void mulrs(const ArgVector& reg);
+  void mulbits(const ArgVector& reg);
   void dotprods(const ArgVector& reg, int size);
   void matmuls(const StackedVector<T>& source, const Instruction& instruction);
   void matmulsm(const MemoryPart<T>& source, const ArgVector& args);
@@ -207,6 +210,11 @@ public:
     throw not_implemented();
   }
 
+  virtual void init_shared_prng_if_needed()
+  {
+    throw not_implemented();
+  }
+
   void shuffle(const Instruction& instruction);
   void bitdecint(const Instruction& instruction);
 };
@@ -312,6 +320,10 @@ class Processor : public ArithmeticProcessor
   void call_tape(int tape_number, int arg, const ArgVector& results);
 
   TimerWithComm prep_time();
+
+  void jump(int n);
+
+  void init_shared_prng_if_needed();
 
   private:
 

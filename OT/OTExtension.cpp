@@ -1,5 +1,6 @@
 #include "OTExtension.h"
 #include "OTExtensionWithMatrix.h"
+#include "OTTripleSetup.h"
 
 #include "OT/Tools.h"
 #include "Math/gf2n.h"
@@ -15,6 +16,23 @@ OTExtension::OTExtension(const BaseOT& baseOT, TwoPartyPlayer* player,
     ot_role = INV_ROLE(baseOT.ot_role);
     passive_only = passive;
     init(baseOT.receiver_inputs, baseOT.sender_inputs, baseOT.receiver_outputs);
+}
+
+void OTExtension::init_prf(PlayerBase& P, const BitVector& baseReceiverInput,
+        const vector<array<BitVector, 2> >& baseSenderInput,
+        const vector<BitVector>& baseReceiverOutput)
+{
+    octetStream session_id;
+    session_id.store(P.get_session_id());
+    auto tmpBaseSenderInput = OTTripleSetup::prf(baseSenderInput, session_id);
+    auto tmpBaseReceiverOutput = OTTripleSetup::prf(baseReceiverOutput, session_id);
+    init(baseReceiverInput, tmpBaseSenderInput, tmpBaseReceiverOutput);
+}
+
+void OTExtension::init(const OTTripleSetup& setup, int index)
+{
+    init(setup.base_receiver_inputs, setup.baseSenderInputs.at(index),
+            setup.baseReceiverOutputs.at(index));
 }
 
 

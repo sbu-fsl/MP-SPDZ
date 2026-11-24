@@ -131,11 +131,13 @@ typename ChaiGearPrep<T>::Generator& ChaiGearPrep<T>::get_generator()
     lock.lock();
     if (machine == 0 or machine->setup.part<FD>().alphai == 0)
     {
-        PlainPlayer P(proc->P.N, "ChaiGear" + T::type_string());
+        auto& P = *OnlineOptions::singleton.new_player(proc->P.N,
+                "ChaiGear" + T::type_string());
         if (machine == 0)
             basic_setup(P);
         key_setup(P);
         BaseMachine::add_one_off(P.total_comm());
+        delete &P;
     }
     lock.unlock();
     if (generator == 0)
@@ -172,10 +174,10 @@ void ChaiGearPrep<T>::buffer_squares()
         square_producer = new SquareProducer<FD>(setup.FieldD,
                 this->proc->P.my_num(), 0, false);
     assert(machine);
-    square_producer->run(this->proc->P, setup.pk, setup.calpha, generator.EC,
+    square_producer->run_with_catch(this->proc->P, setup.pk, setup.calpha, generator.EC,
             generator.dd, {});
     MAC_Check<typename FD::T> MC(this->proc->MC.get_alphai());
-    square_producer->sacrifice(this->proc->P, MC);
+    square_producer->sacrifice_with_catch(this->proc->P, MC);
     MC.Check(this->proc->P);
     auto& squares = square_producer->tuples;
     assert(not squares.empty());

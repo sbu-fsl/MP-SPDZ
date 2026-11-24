@@ -25,6 +25,15 @@ def two_power(n):
 def shift_two(n, pos):
     return n >> pos
 
+def vectorize(function):
+    """ :py:func:`library.vectorize`, imported when called because
+    library is loaded after this module """
+    def vectorized_function(*args, **kwargs):
+        from . import library
+        return library.vectorize(function)(*args, **kwargs)
+    vectorized_function.__name__ = function.__name__
+    return vectorized_function
+
 
 def maskRing(a, k):
     shift = int(program.Program.prog.options.ring) - k
@@ -103,6 +112,7 @@ def or_op(a, b, void=None):
 def mul_op(a, b, void=None):
     return a * b
 
+@vectorize
 def PreORC(a, m=None, raw=False):
     k = len(a)
     if k == 1:
@@ -179,6 +189,28 @@ def PreOpL2(op, items):
         output[2 * i] = op(v[i - 1], items[2 * i])
     return output
 
+def PreOpL2_mem(op, items):
+    """ In-place memory version of :py:func:`PreOpL2` """
+    from Compiler.library import for_range_opt
+    k = len(items)
+    half = k // 2
+    output = items
+    if k == 0:
+        return
+    sizes = [half] + list(items.sizes[1:])
+    u = items.value_type.Tensor(sizes)
+    @for_range_opt(half)
+    def _(i):
+        u[i] = op(items[2 * i], items[2 * i + 1])
+    PreOpL2_mem(op, u)
+    v = u
+    @for_range_opt(half)
+    def _(i):
+        output[2 * i + 1] = v[i]
+    @for_range_opt(1,  (k + 1) // 2)
+    def _(i):
+        output[2 * i] = op(v[i - 1], items[2 * i])
+
 def PreOpL2_vec(op, *items):
     """ Vectorized version of :py:func:`PreOpL2` """
     k = len(items[0])
@@ -225,7 +257,7 @@ def PreOpN(op, items):
 
 def PreOR(a=None, raw=False):
     if comparison.const_rounds and a and isinstance(a[0], types._secret):
-        return PreORC(a, raw=raw)
+        return PreORC(a, raw=raw, size=a[0].size)
     else:
         return PreOpL(or_op, a)
 
@@ -304,16 +336,20 @@ def BitAdd(a, b, bits_to_compute=None):
 def BitDec(a, k, m, bits_to_compute=None):
     return program.Program.prog.non_linear.bit_dec(a, k, m)
 
-def BitDecRingRaw(a, k, m):
+def BitDecSplit(a, k, m):
     prog = program.Program.prog
+    prog.reading('bit decomposition', 'ABY3')
+    x = a.split_to_two_summands(m)
+    bits = types._bitint.bit_adder(x[0], x[1])
+    assert len(bits) >= m
+    assert m
+    return bits[:m]
+
+def BitDecRingRaw(a, k, m):
     comparison.require_ring_size(m, 'bit decomposition')
     n_shift = int(program.Program.prog.options.ring) - m
     if program.Program.prog.use_split():
-        prog.reading('bit decomposition', 'ABY3')
-        x = a.split_to_two_summands(m)
-        bits = types._bitint.bit_adder(x[0], x[1])
-        assert len(bits) >= m
-        return bits[:m]
+        return BitDecSplit(a, k, m)
     else:
         if program.Program.prog.use_edabit():
             r, r_bits = types.sint.get_edabit(m, strict=False, size=a.size)
@@ -338,6 +374,8 @@ def BitDecRing(a, k, m):
     return [types.sintbit.conv(bit) for bit in reversed(bits)][::-1]
 
 def BitDecFieldRaw(a, k, m, bits_to_compute=None):
+    if program.Program.prog.use_split():
+        return BitDecSplit(a, k, m)
     comparison.program.reading('bit decomposition', 'CdH10-fixed',
                                'Protocol 3.7')
     instructions_base.set_global_vector_size(a.size)
@@ -360,6 +398,7 @@ def BitDecField(a, k, m, bits_to_compute=None):
 
 
 @instructions_base.ret_cisc
+@vectorize
 def Pow2(a, l):
     comparison.program.curr_tape.require_bit_length(l - 1)
     m = int(ceil(log(l, 2)))
@@ -407,6 +446,7 @@ def B2U_from_Pow2(pow2a, l):
     #print ' '.join(str(b.value) for b in y)
     return [types.sint.conv(1 - y[i]) for i in range(l)]
 
+@vectorize
 def Trunc(a, l, m, compute_modulo=False, signed=False):
     """ Oblivious truncation by secret m """
     prog = program.Program.prog
@@ -471,7 +511,7 @@ def TruncInRing(to_shift, l, pow2m):
     rev = types.sint.bit_compose(reversed(bits))
     rev <<= n_shift
     rev *= pow2m
-    r_bits = [types.sint.get_random_bit() for i in range(l)]
+    r_bits = [types.sint.get_random_bit(size=rev.size) for i in range(l)]
     r = types.sint.bit_compose(r_bits)
     shifted = (rev - (r << n_shift)).reveal(False)
     masked = shifted >> n_shift
@@ -500,7 +540,7 @@ def Int2FL(a, gamma, l):
     a_bits = a.bit_decompose(lam)
     a_bits.reverse()
     b = PreOR(a_bits)
-    t = a * (1 + a.bit_compose(1 - b_i for b_i in b))
+    t = a * (1 + a.bit_compose(b_i.bit_not() for b_i in b))
     p = a.popcnt_bits(b) - lam
     if gamma - 1 > l:
         if types.sfloat.round_nearest:

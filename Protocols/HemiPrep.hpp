@@ -82,12 +82,14 @@ vector<Multiplier<typename T::clear::FD>*>& HemiPrep<T>::get_multipliers()
     lock.lock();
     if (pairwise_machine == 0 or pairwise_machine->other_pks.empty())
     {
-        PlainPlayer P(this->proc->P.N, "Hemi" + T::type_string());
+        auto& P = *OnlineOptions::singleton.new_player(this->proc->P.N,
+                "Hemi" + T::type_string());
         if (pairwise_machine == 0)
             basic_setup(P);
         pairwise_machine->setup<FD>().covert_key_generation(P,
                 *pairwise_machine, 1);
         BaseMachine::add_one_off(P.total_comm());
+        delete &P;
     }
     lock.unlock();
 
@@ -168,8 +170,7 @@ void HemiPrep<T>::buffer_dabits(ThreadQueues* queues)
     if (this->proc->P.num_players() == 2)
     {
         auto& prep = get_two_party_prep();
-        prep.buffer_size = BaseMachine::batch_size<T>(DATA_DABIT,
-                this->buffer_size);
+        prep.buffer_size = this->buffer_size;
         prep.buffer_dabits(queues);
         this->dabits = prep.dabits;
         prep.dabits.clear();

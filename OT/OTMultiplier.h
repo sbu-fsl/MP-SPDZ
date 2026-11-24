@@ -43,6 +43,7 @@ public:
 
     virtual ~OTMultiplierBase() {}
     virtual void multiply() = 0;
+    virtual void multiply_raw() = 0;
 };
 
 template <class V, class W>
@@ -56,12 +57,14 @@ public:
 template <class T>
 class OTMultiplier : public OTMultiplierMac<typename T::sacri_type, typename T::mac_type>
 {
+    void multiply_raw();
+
 protected:
     BitVector keyBits;
     vector< array<BitVector, 2> > senderOutput;
     vector<BitVector> receiverOutput;
 
-    void multiplyForTriples();
+    virtual void multiplyForTriples();
     virtual void multiplyForBits();
     virtual void multiplyForMixed();
 	virtual void multiplyForInputs(MultJob job) = 0;
@@ -180,6 +183,10 @@ class SemiMultiplier : public OTMultiplier<T>
         throw not_implemented();
     }
 
+    void multiplyForTriples(false_type);
+    void multiplyForTriples(true_type);
+
+    void multiplyForTriples();
     void multiplyForBits();
     void multiplyForMixed();
 

@@ -16,6 +16,8 @@
 #include "MascotPrep.h"
 
 #include <algorithm>
+#include <cerrno>
+#include <cstring>
 
 #include "Protocols/MAC_Check_Base.hpp"
 #include "mac_key.hpp"
@@ -126,6 +128,17 @@ void Tree_MAC_Check<U>::exchange(const Player& P)
     CheckIfNeeded(P);
 }
 
+template<class U>
+void MAC_Check_<U>::start_exchange(const Player& P)
+{
+    this->exchange(P);
+}
+
+template<class U>
+void MAC_Check_<U>::stop_exchange(const Player&)
+{
+}
+
 
 template<class U>
 void Tree_MAC_Check<U>::AddToValues(vector<T>& values)
@@ -157,12 +170,23 @@ template<class U>
 void mac_fail_remove(const Player& P)
 {
   string filename;
-  if (U::needs_ot)
-    filename = get_ot_secrets_filename<typename U::prep_type>(P);
+  if (not U::secrets_filename.empty())
+    filename = U::secrets_filename;
+  else if (U::needs_ot)
+    {
+      if (not U::prep_type::clear::Scalar::length())
+        U::prep_type::clear::Scalar::template init<typename U::clear>(false);
+      filename = get_ot_secrets_filename<typename U::prep_type>(P);
+    }
   else
     filename = U::LivePrep::get_full_secrets_filename(P);
   cerr << "Removing " << filename << " because of MAC check failure" << endl;
-  assert(unlink(filename.c_str()) == 0);
+  // The MAC check failure must be reported even if the file cannot be
+  // removed, for example because the MAC key was read from a file
+  // generated elsewhere.
+  if (unlink(filename.c_str()) != 0)
+    cerr << "Could not remove " << filename << ": " << strerror(errno)
+        << endl;
   throw mac_fail();
 }
 
@@ -185,7 +209,10 @@ void MAC_Check_<U>::Check(const Player& P)
   assert(this->coordinator);
   bool debug = OnlineOptions::singleton.has_option("debug_mac");
 
-  if (popen_cnt < 10)
+  if (OnlineOptions::singleton.has_option("mac_fail"))
+    vals.at(0) += P.my_num();
+
+  if (popen_cnt < 10 and debug)
     {
       // no random combination with few values
       vector<typename U::mac_type> deltas;
@@ -331,6 +358,9 @@ void MAC_Check_Z2k<T, U, V, W>::Check(const Player& P)
 {
   if (this->WaitingForCheck() == 0)
     return;
+
+  if (OnlineOptions::singleton.has_option("mac_fail"))
+    this->vals.at(0) += P.my_num();
 
   CODE_LOCATION
 #ifdef DEBUG_MAC

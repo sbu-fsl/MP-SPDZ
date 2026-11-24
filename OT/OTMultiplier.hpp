@@ -147,6 +147,22 @@ void OTMultiplier<T>::init()
 template<class T>
 void OTMultiplier<T>::multiply()
 {
+    try
+    {
+        multiply_raw();
+    }
+    catch (...)
+    {
+        auto filename = get_ot_secrets_filename<T>(generator.get_player());
+        cerr << "Removing " << filename << endl << flush;
+        unlink(filename.c_str());
+        throw;
+    }
+}
+
+template<class T>
+void OTMultiplier<T>::multiply_raw()
+{
     this->outbox.push({});
     MultJob job;
     while (this->inbox.pop(job))
@@ -354,6 +370,65 @@ void OTMultiplier<W>::multiplyForTriples()
     }
 }
 
+template<class T>
+void SemiMultiplier<T>::multiplyForTriples(false_type)
+{
+    OTMultiplier<T>::multiplyForTriples();
+}
+
+template<class T>
+void SemiMultiplier<T>::multiplyForTriples(true_type)
+{
+    if (this->generator.machine.use_extension)
+    {
+        CODE_LOCATION
+        MultJob job;
+        this->outbox.push(job);
+
+        for (int i = 0; i < this->generator.nloops; i++)
+        {
+            this->inbox.pop(job);
+            const auto& a_bits = this->generator.valueBits[0];
+            const auto& b_bits = this->generator.valueBits[1];
+            auto tmp = a_bits;
+            tmp.resize(multiple_minimum(tmp.size(), 128));
+            auto ot_bits = this->rot_ext.bit_extension(tmp);
+            ot_bits.second.resize(a_bits.size());
+            for (auto& x : ot_bits.first)
+                x.resize(a_bits.size());
+            auto diff = ot_bits.first[0] ^ ot_bits.first[1] ^ b_bits;
+            auto my_diff = diff;
+            octetStream os;
+            diff.pack(os);
+            this->generator.players[this->thread_num]->exchange(os);
+            diff.unpack(os);
+            assert(T::n_bits == 64);
+            assert(a_bits.size() % 64 == 0);
+            size_t n_chunks = a_bits.size() / 64;
+            c_output.clear();
+            c_output.reserve(n_chunks);
+            assert(diff.size() >= ot_bits.second.size());
+            for (size_t i = 0; i < n_chunks; i++)
+            {
+                auto c = ot_bits.second.get_word(i);
+                c ^= ot_bits.first[0].get_word(i);
+                c ^= a_bits.get_word(i) & diff.get_word(i);
+                c_output.push_back(c);
+            }
+        }
+
+        this->outbox.push(job);
+    }
+    else
+        multiplyForTriples(false_type());
+}
+
+template<class T>
+void SemiMultiplier<T>::multiplyForTriples()
+{
+    multiplyForTriples(T::clear::binary);
+}
+
 template <class T>
 void MascotMultiplier<T>::init_authenticator(const BitVector& keyBits,
 		const vector< array<BitVector, 2> >& senderOutput,
@@ -405,8 +480,9 @@ template <int K, int S>
 void Spdz2kMultiplier<K, S>::init_authenticator(const BitVector& keyBits,
 		const vector< array<BitVector, 2> >& senderOutput,
 		const vector<BitVector>& receiverOutput) {
-	this->mac_vole->init(keyBits, senderOutput, receiverOutput);
-	input_mac_vole->init(keyBits, senderOutput, receiverOutput);
+	auto& P = *this->generator.players[this->thread_num];
+	this->mac_vole->init_prf(P, keyBits, senderOutput, receiverOutput);
+	input_mac_vole->init_prf(P, keyBits, senderOutput, receiverOutput);
 }
 
 template<class T>
@@ -595,7 +671,10 @@ void MascotMultiplier<T>::multiplyForBits(true_type)
     if (OnlineOptions::singleton.has_option("debug_mac"))
         cerr << "key bits: " << extKeyBits.str() << endl;
     extKeyBits.resize_zero(128);
-    auto extSenderOutput = this->senderOutput;
+    octetStream session_id;
+    GlobalPRNG(*generator.players[this->thread_num]).get_octetStream(session_id,
+            crypto_generichash_KEYBYTES);
+    auto extSenderOutput = OTTripleSetup::prf(this->senderOutput, session_id);
     extSenderOutput.resize(128, {{2, BitVector(128)}});
     SeededPRNG G;
     for (auto& x : extSenderOutput)
@@ -605,7 +684,8 @@ void MascotMultiplier<T>::multiplyForBits(true_type)
                 y.resize(128);
                 y.randomize(G);
             }
-    auto extReceiverOutput = this->receiverOutput;
+    auto extReceiverOutput = OTTripleSetup::prf(this->receiverOutput,
+            session_id);
     extReceiverOutput.resize(128, 128);
     OTExtensionWithMatrix auth_ot_ext(generator.players[this->thread_num], BOTH,
             true);

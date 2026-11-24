@@ -55,6 +55,8 @@ class Machine : public BaseMachine
   int max_trunc_size;
   Lock warn_lock;
 
+  set<int> active_threads;
+
   size_t load_program(const string& threadname, const string& filename);
 
   void prepare(const string& progname_str);
@@ -84,7 +86,7 @@ class Machine : public BaseMachine
 
   static void init_binary_domains(int security_parameter, int lg2);
 
-  Machine(Names& playerNames, bool use_encryption = true,
+  Machine(Names& playerNames,
           const OnlineOptions opts = sint());
   ~Machine();
 

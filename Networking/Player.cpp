@@ -276,6 +276,8 @@ Player::~Player()
   for (auto& x : thread_stats)
     x.print();
 #endif
+  for (auto child : children)
+    delete child.second;
 }
 
 PlayerBase::~PlayerBase()
@@ -350,6 +352,25 @@ void PlainPlayer::setup_sockets(const vector<string>& names,
 }
 
 
+vector<int> Player::balanced_others() const
+{
+  vector<int> res;
+  for (int offset = 1; offset <= num_players() / 2; offset++)
+    {
+      int others[] = { get_player(offset), get_player(-offset) };
+      if (my_num() % (2 * offset) < offset)
+        swap(others[0], others[1]);
+
+      if (num_players() % 2 == 0 and offset == num_players() / 2)
+        res.push_back(others[0]);
+      else
+        for (int i = 0; i < 2; i++)
+          res.push_back(others[i]);
+    }
+  return res;
+}
+
+
 template<class T>
 void MultiPlayer<T>::send_long(int i, long a) const
 {
@@ -391,6 +412,15 @@ void Player::send_all(const octetStream& o) const
          send_to_no_stats(i, o);
      }
   sent += o.get_length() * (num_players() - 1);
+}
+
+
+void Player::send_all(const vector<octetStream>& os) const
+{
+  for (int i=0; i<nplayers; i++)
+     { if (i!=player_no)
+         send_to(i, os[i]);
+     }
 }
 
 
@@ -607,9 +637,7 @@ void Player::Check_Broadcast() const
 void Player::send_receive_all(const vector<octetStream>& to_send,
     vector<octetStream>& to_receive) const
 {
-  send_receive_all(
-      vector<vector<bool>>(num_players(), vector<bool>(num_players(), true)),
-      to_send, to_receive);
+  send_receive_all(vector<vector<bool>>(), to_send, to_receive);
 }
 
 void Player::send_receive_all(const vector<bool>& senders,
@@ -627,7 +655,7 @@ void Player::send_receive_all(const vector<vector<bool>>& channels,
 {
   size_t data = 0;
   for (int i = 0; i < num_players(); i++)
-    if (i != my_num() and channels.at(my_num()).at(i))
+    if (i != my_num() and (channels.empty() or channels.at(my_num()).at(i)))
       {
         data += to_send.at(i).get_length();
         if (OnlineOptions::singleton.has_option("detailed_verbose_comm"))
@@ -655,8 +683,8 @@ void MultiPlayer<T>::send_receive_all_no_stats(
     {
       int receive_from = get_player(-offset);
       int send_to = get_player(offset);
-      bool receive = channels[receive_from][my_num()];
-      if (channels[my_num()][send_to])
+      bool receive = channels.empty() or channels[receive_from][my_num()];
+      if (channels.empty() or channels[my_num()][send_to])
         {
           if (receive)
             pass_around_no_stats(to_send[send_to], to_receive[receive_from], offset);
@@ -767,6 +795,12 @@ VirtualTwoPartyPlayer::VirtualTwoPartyPlayer(Player& P, int other_player) :
 {
 }
 
+VirtualTwoPartyPlayer::~VirtualTwoPartyPlayer()
+{
+  for (auto x : children)
+      delete x;
+}
+
 size_t VirtualTwoPartyPlayer::send(const PlayerBuffer& buffer, bool block) const
 {
   auto sent = P.send_no_stats(other_player, buffer, block);
@@ -784,6 +818,22 @@ size_t VirtualTwoPartyPlayer::recv(const PlayerBuffer& buffer, bool block) const
   comm_stats.add_to_last_round("Receiving one-to-one", received);
   lock.unlock();
   return received;
+}
+
+void VirtualTwoPartyPlayer::exchange(octetStream& o)
+{
+  TimeScope ts(comm_stats["Exchanging one-to-one"].add(o));
+  comm_stats.sent += o.get_length();
+  P.exchange_no_stats(other_player, o, o);
+}
+
+void VirtualTwoPartyPlayer::partial_broadcast(const vector<bool>&,
+    const vector<bool>&, vector<octetStream>& o) const
+{
+  auto& to_send = o.at(my_num());
+  TimeScope ts(comm_stats["Broadcast"].add(to_send));
+  comm_stats.sent += o.at(my_num()).get_length();
+  P.exchange_no_stats(other_player, to_send, o.at(1 - my_num()));
 }
 
 void OffsetPlayer::send_receive_player(vector<octetStream>& o) const
@@ -938,6 +988,8 @@ void Player::reset_stats()
   comm_stats.reset();
   for (auto& x : thread_stats)
       x.reset();
+  for (auto child : children)
+      child.second->reset_stats();
 }
 
 NamedCommStats Player::total_comm() const
@@ -945,7 +997,40 @@ NamedCommStats Player::total_comm() const
   auto res = comm_stats;
   for (auto& x : thread_stats)
     res += x;
+  for (auto child : children)
+    res += child.second->total_comm();
   return res;
+}
+
+Player* Player::fork(string suffix)
+{
+  lock.lock();
+  if (children.find(suffix) == children.end())
+      children[suffix] = fresh_fork(suffix);
+  auto res = children[suffix];
+  lock.unlock();
+  return res;
+}
+
+Player* PlainPlayer::fresh_fork(string suffix)
+{
+  return new PlainPlayer(N, get_id() + "-" + suffix);
+}
+
+TwoPartyPlayer* VirtualTwoPartyPlayer::fork(string suffix)
+{
+  lock.lock();
+  auto res = new VirtualTwoPartyPlayer(*P.fork(suffix), other_player);
+  children.push_back(res);
+  lock.unlock();
+  return res;
+}
+
+word PlayerBase::get_session_id() const
+{
+  if (not session_gen.is_initialized())
+    session_gen.SeedGlobally(*this);
+  return session_gen.get_word();
 }
 
 template class MultiPlayer<int>;

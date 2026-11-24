@@ -10,6 +10,7 @@
 #include "GC/SemiSecret.h"
 #include "GC/SemiPrep.h"
 #include "Processor/OnlineOptions.h"
+#include "Networking/CryptoPlayer.h"
 
 #include "OT/Triple.hpp"
 #include "OT/OTMultiplier.hpp"
@@ -104,10 +105,11 @@ Spdz2kTripleGenerator<T>::Spdz2kTripleGenerator(const OTTripleSetup& setup,
 }
 
 template<class T>
-void OTTripleGenerator<T>::set_batch_size(int batch_size)
+void OTTripleGenerator<T>::set_batch_size(int batch_size, bool limit)
 {
     // limit to ~1 GB
-    batch_size = min(batch_size, int(1e7 / sizeof(T) / sizeof(T)));
+    if (limit)
+        batch_size = min(batch_size, int(1e7 / sizeof(T) / sizeof(T)));
     if (OnlineOptions::singleton.has_option("verbose_ot"))
         fprintf(stderr, "OT batch size %d (share size %d)\n", batch_size,
                 int(sizeof(T)));
@@ -120,7 +122,7 @@ template<class T>
 OTTripleGenerator<T>::OTTripleGenerator(const OTTripleSetup& setup,
         const Names& names, int thread_num, int _nTriples, int nloops,
         MascotParams& machine, Player* parentPlayer) :
-        globalPlayer(parentPlayer ? *parentPlayer : *new PlainPlayer(names,
+        globalPlayer(parentPlayer ? *parentPlayer : *new CryptoPlayer(names,
                 to_string(thread_num))),
         parentPlayer(parentPlayer),
         thread_num(thread_num),
@@ -131,7 +133,19 @@ OTTripleGenerator<T>::OTTripleGenerator(const OTTripleSetup& setup,
         MC(0)
 {
     field_size = T::open_type::size() * 8;
-    nAmplify = machine.amplify ? N_AMPLIFY : 1;
+
+    if (machine.amplify)
+    {
+        if (2 * OnlineOptions::singleton.security_parameter
+                < T::open_type::length())
+            nAmplify = 3;
+        else
+            nAmplify = 4;
+    }
+    else
+        nAmplify = 1;
+
+    assert(0 < nAmplify and nAmplify <= MAX_AMPLIFY);
     set_batch_size(_nTriples);
 
     int n = nparties;
@@ -144,6 +158,8 @@ OTTripleGenerator<T>::OTTripleGenerator(const OTTripleSetup& setup,
     baseSenderInputs = setup.baseSenderInputs;
     assert(size_t(nbase) == baseSenderInputs.at(0).size());
     players.resize(n-1);
+
+    local_mac_key = mac_key.get_fresh(globalPlayer);
 
     // copy base OT inputs + outputs
     for (int j = 0; j < 128; j++)
@@ -530,7 +546,7 @@ void Spdz2kTripleGenerator<T>::generateTriples()
 		r.set_mac(r_mac);
 
 		MC.set_random_element(r);
-		sacrificeZ2k(MC, G);
+		sacrificeZ2k(MC);
 	}
 }
 
@@ -561,6 +577,9 @@ void OTTripleGenerator<T>::generatePlainBits()
 
     int batch_size = nPreampTriplesPerLoop;
     int n = multiple_minimum(batch_size, T::Rectangle::n_rows_allocated());
+
+    if (OnlineOptions::singleton.has_option("debug_plain"))
+        cerr << "Generating " << n << " plain bits" << endl;
 
     valueBits.resize(1);
     valueBits[0].resize(n);
@@ -761,7 +780,7 @@ void SimpleMascotTripleGenerator<U>::generateTriples()
             for (int iTriple = 0; iTriple < nTriplesPerLoop; iTriple++)
             {
                 PlainTriple<T,2> triple;
-                triple.amplify(preampTriples[iTriple], G);
+                triple.amplify(preampTriples[iTriple], G, this->nAmplify);
 
                 if (machine.generateMACs)
                     amplifiedTriples[iTriple] = triple;
@@ -802,7 +821,7 @@ void SimpleMascotTripleGenerator<U>::generateTriples()
 
                 if (machine.check)
                 {
-                    sacrifice(this->MC ? *this->MC : MC, G);
+                    sacrifice(this->MC ? *this->MC : MC);
                 }
             }
         }
@@ -810,7 +829,7 @@ void SimpleMascotTripleGenerator<U>::generateTriples()
 }
 
 template<class T>
-void MascotTripleGenerator<T>::sacrifice(typename T::MAC_Check& MC, PRNG& G)
+void MascotTripleGenerator<T>::sacrifice(typename T::MAC_Check& MC)
 {
     CODE_LOCATION
     auto& machine = this->machine;
@@ -823,6 +842,7 @@ void MascotTripleGenerator<T>::sacrifice(typename T::MAC_Check& MC, PRNG& G)
 
     vector<T> maskedAs(nTriplesPerLoop);
     vector<TripleToSacrifice<T> > maskedTriples(nTriplesPerLoop);
+    GlobalPRNG G(globalPlayer);
     for (int j = 0; j < nTriplesPerLoop; j++)
     {
         maskedTriples[j].template prepare_sacrifice<T>(uncheckedTriples[j], G);
@@ -871,7 +891,7 @@ void MascotTripleGenerator<T>::sacrifice(typename T::MAC_Check& MC, PRNG& G)
 
 template<class W>
 template<class U>
-void Spdz2kTripleGenerator<W>::sacrificeZ2k(U& MC, PRNG& G)
+void Spdz2kTripleGenerator<W>::sacrificeZ2k(U& MC)
 {
     CODE_LOCATION
     typedef sacri_type T;
@@ -886,6 +906,7 @@ void Spdz2kTripleGenerator<W>::sacrificeZ2k(U& MC, PRNG& G)
 
     vector<prep_check_type> maskedAs(nTriplesPerLoop);
     vector<TripleToSacrifice<Share<T>> > maskedTriples(nTriplesPerLoop);
+    GlobalPRNG G(globalPlayer);
     for (int j = 0; j < nTriplesPerLoop; j++)
     {
         // compute [p] = t * [a] - [ahat]

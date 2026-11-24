@@ -21,6 +21,7 @@ using namespace std;
 //#define OTEXT_TIMER
 //#define OTEXT_DEBUG
 
+class OTTripleSetup;
 
 class OTExtension
 {
@@ -36,6 +37,12 @@ public:
           ot_role(role), player(player)
     {
     }
+
+    void init_prf(PlayerBase& P, const BitVector& baseReceiverInput,
+            const vector< array<BitVector, 2> >& baseSenderInput,
+            const vector<BitVector>& baseReceiverOutput);
+
+    void init(const OTTripleSetup& setup, int index);
 
     void init(const BitVector& baseReceiverInput,
             const vector< array<BitVector, 2> >& baseSenderInput,

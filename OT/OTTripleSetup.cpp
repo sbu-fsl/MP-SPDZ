@@ -57,23 +57,78 @@ void OTTripleSetup::close_connections()
     }
 }
 
+BitVector OTTripleSetup::prf(const BitVector& key, const octetStream& input)
+{
+    assert(crypto_generichash_KEYBYTES >= key.size_bytes());
+    octet hash[crypto_generichash_KEYBYTES];
+    crypto_generichash(hash, key.size_bytes(), input.get_data(), input.get_length(),
+            key.get_ptr(), key.size_bytes());
+    return BitVector(hash, key.size());
+}
+
+OTTripleSetup::sender_type OTTripleSetup::prf(const sender_type& keys,
+        const octetStream& input)
+{
+    sender_type res;
+    for (auto& x : keys)
+    {
+        res.push_back({});
+        assert(x.at(0) != x.at(1));
+        for (auto i = 0; i < 2; i++)
+            res.back().at(i) = prf(x.at(i), input);
+        assert(res.back().at(0) != res.back().at(1));
+    }
+    return res;
+}
+
+OTTripleSetup::receiver_type OTTripleSetup::prf(const receiver_type& keys,
+        const octetStream& input)
+{
+    receiver_type res;
+    for (auto& x : keys)
+        res.push_back(prf(x, input));
+    return res;
+}
+
+OTTripleSetup OTTripleSetup::get_fresh(Player& P) const
+{
+    GlobalPRNG G(P);
+    octetStream session_id;
+    G.get_octetStream(session_id, crypto_generichash_KEYBYTES);
+    OTTripleSetup res;
+    res.base_receiver_inputs = base_receiver_inputs;
+    for (int i = 0; i < nparties - 1; i++)
+    {
+        res.baseSenderInputs.push_back(prf(baseSenderInputs.at(i), session_id));
+        res.baseReceiverOutputs.push_back(prf(baseReceiverOutputs.at(i), session_id));
+    }
+    return res;
+}
+
 OTTripleSetup OTTripleSetup::get_fresh()
 {
     OTTripleSetup res = *this;
     for (int i = 0; i < nparties - 1; i++)
     {
-        BaseOT bot(get_nbase(), 0);
-        bot.sender_inputs = baseSenderInputs.at(i);
-        bot.receiver_outputs = baseReceiverOutputs.at(i);
-        bot.set_seeds();
-        bot.extend_length();
-        baseSenderInputs.at(i) = bot.sender_inputs;
-        baseReceiverOutputs.at(i) = bot.receiver_outputs;
-        bot.extend_length();
+        auto bot = get_base(i);
         res.baseSenderInputs.at(i) = bot.sender_inputs;
         res.baseReceiverOutputs.at(i) = bot.receiver_outputs;
     }
     return res;
+}
+
+BaseOT OTTripleSetup::get_base(size_t index)
+{
+    BaseOT bot(get_nbase(), 0);
+    bot.receiver_inputs = base_receiver_inputs;
+    bot.sender_inputs = baseSenderInputs.at(index);
+    bot.receiver_outputs = baseReceiverOutputs.at(index);
+    bot.set_seeds();
+    bot.extend_length();
+    baseSenderInputs.at(index) = bot.sender_inputs;
+    baseReceiverOutputs.at(index) = bot.receiver_outputs;
+    bot.extend_length();
+    return bot;
 }
 
 void OTTripleSetup::pack(octetStream& os) const
@@ -102,7 +157,7 @@ void OTTripleSetup::unpack(octetStream& os)
         assert(x.size() == size_t(nbase));
 }
 
-void OTTripleSetup::check(TwoPartyPlayer& P)
+void OTTripleSetup::check(TwoPartyPlayer& P) const
 {
     insecure("reveal for check");
     int index = index_for(P.other_player_num());

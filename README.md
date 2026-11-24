@@ -32,7 +32,7 @@ Resolve any conflicts, review the merge, then commit and push it.
 
 The upstream MP-SPDZ README follows.
 
-# Multi-Protocol SPDZ [![Documentation Status](https://readthedocs.org/projects/mp-spdz/badge/?version=latest)](https://mp-spdz.readthedocs.io/en/latest/?badge=latest) [![Build Status](https://dev.azure.com/data61/MP-SPDZ/_apis/build/status/data61.MP-SPDZ?branchName=master)](https://dev.azure.com/data61/MP-SPDZ/_build/latest?definitionId=7&branchName=master) [![Gitter](https://badges.gitter.im/MP-SPDZ/community.svg)](https://gitter.im/MP-SPDZ/community?utm_source=badge&utm_medium=badge&utm_campaign=pr-badge)
+# Multi-Protocol SPDZ [![Documentation Status](https://app.readthedocs.org/projects/mp-spdz/badge/?version=latest)](https://mp-spdz.readthedocs.io/en/latest/?badge=latest) [![Build Status](https://dev.azure.com/data61/MP-SPDZ/_apis/build/status/data61.MP-SPDZ?branchName=master)](https://dev.azure.com/data61/MP-SPDZ/_build/latest?definitionId=7&branchName=master) [![Gitter](https://badges.gitter.im/MP-SPDZ/community.svg)](https://gitter.im/MP-SPDZ/community?utm_source=badge&utm_medium=badge&utm_campaign=pr-badge)
 
 This is a software to benchmark various secure multi-party computation
 (MPC) protocols in a variety of security models such as honest and
@@ -99,6 +99,7 @@ the top folder:
 Scripts/tldr.sh
 echo 1 2 3 4 > Player-Data/Input-P0-0
 echo 1 2 3 4 > Player-Data/Input-P1-0
+Scripts/setup-ssl.sh
 Scripts/compile-run.py -E mascot tutorial
 ```
 
@@ -319,15 +320,9 @@ compute the preprocessing time for a particular computation.
    (tested with up to 22). The default is to use clang because it performs
    better.
  - For protocols using oblivious transfer, libOTe with [the necessary
-   patches](https://github.com/mkskeller/softspoken-implementation)
+   patches](https://github.com/mkskeller/libOTe)
    but without SimplestOT. The easiest way is to run `make libote`,
-   which will install it as needed in a subdirectory. libOTe requires
-   CMake of version at least 3.15, which is not available by default
-   on older systems such as Ubuntu 18.04. You can run `make cmake` to
-   install it locally.
-   libOTe also requires boost of version at least 1.75, which is not
-   available by default on relatively recent systems such as Ubuntu
-   22.04. You can install it locally by running `make boost`.
+   which will install it as needed in a subdirectory.
  - GMP library, compiled with C++ support (use flag `--enable-cxx`
    when running configure). Tested against 6.2.1 as supplied by
    Ubuntu.

@@ -24,6 +24,7 @@ using namespace std;
 #include "Tools/ezOptionParser.h"
 #include "Networking/PlayerBuffer.h"
 #include "Tools/Lock.h"
+#include "Tools/random.h"
 
 template<class T> class MultiPlayer;
 class Server;
@@ -202,6 +203,8 @@ protected:
   size_t& sent;
   mutable NamedCommStats comm_stats;
 
+  mutable PRNG session_gen;
+
 public:
   mutable Timer timer;
 
@@ -212,6 +215,13 @@ public:
   virtual int my_num() const = 0;
   virtual int num_players() const = 0;
 
+  int get_offset(int other_player) const
+  { return positive_modulo(other_player - my_num(), num_players()); }
+  int get_player(int offset) const
+  { return positive_modulo(offset + my_num(), num_players()); }
+
+  virtual void send_all(const octetStream&) const
+  { throw not_implemented(); }
   virtual void receive_player(int, octetStream&) const
   { throw not_implemented(); }
   virtual void pass_around(octetStream&, int = 1) const
@@ -226,6 +236,8 @@ public:
   virtual void partial_broadcast(const vector<bool>&,
       const vector<bool>&, vector<octetStream>&) const
   { throw not_implemented(); }
+
+  word get_session_id() const;
 };
 
 /**
@@ -239,6 +251,9 @@ protected:
   int nplayers;
 
   mutable Hash ctx;
+
+  map<string, Player*> children;
+  Lock lock;
 
 public:
   const Names& N;
@@ -259,10 +274,9 @@ public:
    */
   int my_num() const { return player_no; }
 
-  int get_offset(int other_player) const { return positive_modulo(other_player - my_num(), num_players()); }
-  int get_player(int offset) const { return positive_modulo(offset + my_num(), num_players()); }
-
   virtual bool is_encrypted() { return false; }
+
+  vector<int> balanced_others() const;
 
   virtual void send_long(int, long) const { throw not_implemented(); }
   virtual long receive_long(int) const { throw not_implemented(); }
@@ -274,6 +288,10 @@ public:
    * Send the same to all other players
    */
   virtual void send_all(const octetStream& o) const;
+  /**
+   * Send something different to each of the other players
+   */
+  virtual void send_all(const vector<octetStream>& os) const;
   /**
    * Send to a specific player
    */
@@ -413,6 +431,10 @@ public:
 
   NamedCommStats total_comm() const;
   void reset_stats();
+
+  virtual Player* fork(string suffix);
+  virtual Player* fresh_fork(string)
+  { throw not_implemented(); }
 };
 
 /**
@@ -493,6 +515,8 @@ public:
 
   size_t send_no_stats(int player, const PlayerBuffer& buffer, bool block) const;
   size_t recv_no_stats(int player, const PlayerBuffer& buffer, bool block) const;
+
+  Player* fresh_fork(string suffix);
 };
 
 
@@ -521,6 +545,8 @@ public:
 
   virtual int my_num() const = 0;
   virtual int other_player_num() const = 0;
+  virtual Player& get_full_player() const
+  { throw not_implemented(); }
 
   virtual void send(octetStream& o) const = 0;
   virtual void receive(octetStream& o) const = 0;
@@ -531,6 +557,9 @@ public:
   { throw not_implemented(); }
   virtual size_t recv(const PlayerBuffer&, bool) const
   { throw not_implemented(); }
+
+  virtual TwoPartyPlayer* fork(string)
+  { throw not_implemented(); }
 };
 
 // for different threads, separate statistics
@@ -539,27 +568,36 @@ class VirtualTwoPartyPlayer : public TwoPartyPlayer
   Player& P;
   int other_player;
   NamedCommStats& comm_stats;
+  vector<VirtualTwoPartyPlayer*> children;
 
   mutable Lock lock;
 
 public:
   VirtualTwoPartyPlayer(Player& P, int other_player);
+  ~VirtualTwoPartyPlayer();
 
   // emulate RealTwoPartyPlayer
   int my_num() const { return P.my_num() > other_player; }
   int other_player_num() const { return other_player; }
   int num_players() const { return 2; }
+  Player& get_full_player() const { return P; }
 
   void send(octetStream& o) const;
   void receive(octetStream& o) const;
   void send_receive_player(vector<octetStream>& o) const;
 
   void pass_around(octetStream& o, int _ = 1) const { (void)_, (void) o; throw not_implemented(); }
+  void exchange(octetStream& o);
+
+  void partial_broadcast(const vector<bool>&,
+      const vector<bool>&, vector<octetStream>& o) const;
 
   size_t send(const PlayerBuffer& buffer, bool block) const;
   size_t recv(const PlayerBuffer& buffer, bool block) const;
 
   NamedCommStats get_comm_stats() const { return comm_stats; }
+
+  TwoPartyPlayer* fork(string suffix);
 };
 
 class RealTwoPartyPlayer : public VirtualTwoPartyPlayer

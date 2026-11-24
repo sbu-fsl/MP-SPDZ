@@ -50,6 +50,10 @@ public:
     vector<receiver_type> baseReceiverOutputs;
     BitVector base_receiver_inputs;
 
+    static BitVector prf(const BitVector& key, const octetStream& input);
+    static sender_type prf(const sender_type& keys, const octetStream& input);
+    static receiver_type prf(const receiver_type& keys, const octetStream& input);
+
     int get_nparties() const { return nparties; }
     int get_nbase() const { return base_receiver_inputs.size(); }
     int get_my_num() const { return my_num; }
@@ -110,8 +114,11 @@ public:
     //T get_mac_key();
 
     OTTripleSetup get_fresh();
+    OTTripleSetup get_fresh(Player& P) const;
 
-    int index_for(int other)
+    BaseOT get_base(size_t index);
+
+    int index_for(int other) const
     {
         assert(other != my_num);
         if (other > my_num)
@@ -123,7 +130,7 @@ public:
     void pack(octetStream& os) const;
     void unpack(octetStream& os);
 
-    void check(TwoPartyPlayer& P);
+    void check(TwoPartyPlayer& P) const;
 };
 
 class OnDemandOTTripleSetup

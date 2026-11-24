@@ -185,34 +185,34 @@ def get_bit(x, index, bit_length):
     else:
         return get_block(x, index, 1, bit_length).get_slice()[0]
 
-def demux(x):
+def demux(x, n_threads=None):
     """ Demuxing like in the Galois paper. """
     # res = Array(2**len(x), x[0].reg_type)
     # for i,v in enumerate(demux_list(x)):
     #     res[i] = v
     # return res
 
-    if 2**len(x) <= n_parallel:
+    if 2**len(x) <= n_parallel and not (n_threads and len(x) > 1):
         return demux_list(x)
     else:
-        return demux_array(x)
+        return demux_array(x, n_threads=n_threads)
 
 def demux_list(x):
     n = len(x)
     if n == 0:
         return [1]
     elif n == 1:
-        return [1 - x[0], x[0]]
+        return [util.bit_not(x[0], 1), x[0]]
     a = demux_list(x[:n//2])
     b = demux_list(x[n//2:])
     n_a = len(a)
     a *= len(b)
     b = reduce(operator.add, ([i] * n_a for i in b))
-    res = list(map(operator.mul, a, b))
+    res = list(map(util.bit_and, a, b))
     return res
 
-def demux_array(x, res=None):
-    tmp = demux_matrix(x).array
+def demux_array(x, res=None, n_threads=None):
+    tmp = demux_matrix(x, n_threads=n_threads).array
     if res:
         try:
             assert issubclass(x.value_type, _register)
@@ -226,26 +226,77 @@ def demux_array(x, res=None):
     return res
 
 def demux_matrix(x, n_threads=None):
+    r""" Demuxing (converting from binary to unary represention).
+
+    :param x: :math:`n \times m`-matrix of secret bits (:math:`m`
+      entries of :math:`n` bits)
+    :param res: array for result if given (default is to allocate)
+    :param n_threads: number of threads (default is running in same thread)
+    :returns: :math:`2^n \times m`-matrix of secret bits
+    """
+    have_matrix = isinstance(x, SubMultiArray) and len(x.shape) == 2
     n = len(x)
     if n == 0:
         return [1]
     m = len(x[0])
-    t = type(x[0])
-    res = Matrix(2**n, m, type(x[0]))
-    if n == 1:
-        res[0] = 1 - x[0]
-        res[1] = x[0]
+    if have_matrix:
+        t = x.value_type
     else:
-        a = Matrix(2**(n//2), m, type(x[0]))
-        a.assign(demux(x[:n//2]))
-        b = Matrix(2**(n-n//2), m, type(x[0]))
-        b.assign(demux(x[n//2:]))
-        @for_range_opt_multithread(n_threads, len(a))
-        def f(i):
-            @for_range_opt(len(b))
-            def f(j):
-                res[j * len(a) + i][:] = a[i][:] * b[j][:]
+        assert isinstance(x, (list, tuple))
+        t = type(x[0])
+    res = t.Matrix(2**n, m)
+    if n == 1:
+        if have_matrix:
+            @multithread(n_threads, m)
+            def _(base, size):
+                part = x[0].get_vector(base=base, size=size)
+                res[0].assign_vector(part.bit_not(), base=base)
+                res[1].assign_vector(part, base=base)
+        else:
+            res[0] = util.bit_not(x[0], 1)
+            res[1] = x[0]
+    else:
+        if have_matrix:
+            a = demux_matrix(x.get_part(start=0, size=n // 2))
+            b = demux_matrix(x.get_part(start=n // 2, size=n - n // 2))
+        else:
+            a = Matrix(2**(n//2), m, type(x[0]))
+            a.assign(demux(x[:n//2], n_threads=n_threads))
+            b = Matrix(2**(n-n//2), m, type(x[0]))
+            b.assign(demux(x[n//2:], n_threads=n_threads))
+        @multithread(n_threads, m)
+        def _(base, size):
+            @for_range_opt(len(a))
+            def f(i):
+                @for_range_opt(len(b))
+                def f(j):
+                    kwargs = {'base': base, 'size': size}
+                    res[j * len(a) + i].assign_vector(
+                        a[i].get_vector(**kwargs) * b[j].get_vector(**kwargs),
+                        base=base)
+        # in a function block, a and b are used again on every call,
+        # so they must not be freed
+        if Program.prog.curr_block.alloc_pool.parent is None:
+            a.delete()
+            b.delete()
     return res
+
+def decompose_demux(x, n_bits, n_threads=None):
+    r""" Bit decomposition followed by :py:func:`demux_matrix`.
+
+    :param x: secret inputs (vector, :py:class:`Array`, or list)
+    :param n_bits: number of bits in entries
+    :param n_threads: number of threads (default is running in same thread)
+    :returns: :math:`2^n \times m`-matrix of secret bits
+    """
+    tmp = Array.create_from(x)
+    bits = tmp.value_type.bit_type.Matrix(n_bits, len(x))
+    @multithread(n_threads, len(x))
+    def _(base, size):
+        for i, part in enumerate(
+                tmp.get_vector(base=base, size=size).bit_decompose(n_bits)):
+            bits[i].assign_vector(part, base=base)
+    return demux_matrix(bits, n_threads=n_threads)
 
 def get_first_one(x):
     prefix_list = [0] + floatingpoint.PreOR(x, Program.prog.security)
@@ -1061,6 +1112,40 @@ def get_n_threads_for_tree(size):
     else:
         return n_threads_for_tree
 
+class _PairedBucketRAM(object):
+    """ Two buckets of the same depth as one RAM of vectors of size two
+    (bucket p1 in the first element, p2 in the second), so that pop and
+    add evict both buckets at once. """
+    def __init__(self, oram, p1, p2):
+        bs = oram.bucket_size
+        self.size = bs
+        self._arrays = oram.ram.l
+        self._p1 = p1
+        self._p2 = p2
+        self.l = []
+        for arr in self._arrays:
+            t = arr.value_type
+            v1 = arr.get_vector(p1 * bs, bs)
+            v2 = arr.get_vector(p2 * bs, bs)
+            z = t.zip(v1, v2)  # [v1_0, v2_0, v1_1, v2_1, ...]
+            self.l.append([z.get_vector(2 * i, 2) for i in range(bs)])
+    def get_empty_bits(self):
+        return self.l[0]
+    def __len__(self):
+        return self.size
+    def __getitem__(self, i):
+        return Entry(col[i] for col in self.l)
+    def __setitem__(self, i, value):
+        for col, v in zip(self.l, value.values()):
+            col[i] = v
+    def writeback(self):
+        bs = self.size
+        for arr, col in zip(self._arrays, self.l):
+            t = arr.value_type
+            packed = t.concat(col)  # [v1_0, v2_0, v1_1, v2_1, ...]
+            arr.assign_vector(packed.get_vector(0, bs, 2), self._p1 * bs)
+            arr.assign_vector(packed.get_vector(1, bs, 2), self._p2 * bs)
+
 class TreeORAM(AbstractORAM):
     """ Tree ORAM. """
     def __init__(self, size, value_type=None, value_length=1, entry_size=None, \
@@ -1140,10 +1225,41 @@ class TreeORAM(AbstractORAM):
                                                         op='evic')
                 bucket.ref_children(1-b).bucket.check(index=secret_entry.v, \
                                                           op='evic')
+    def _paired_ref(self, p1, p2):
+        # bucket reference whose pop and add act on buckets p1 and p2 at once
+        ref = self.bucket_oram.ref_type(p1, self)
+        ref.ram = _PairedBucketRAM(self, p1, p2)
+        return ref
     @method_block
     def evict2(self, p_bucket1, p_bucket2, d):
-        self.evict_bucket(RefBucket(p_bucket1, self), d)
-        self.evict_bucket(RefBucket(p_bucket2, self), d)
+        if debug or debug_online or crash_on_overflow or debug_ram_size or \
+           self.value_type == sgf2n or \
+           (comparison.use_inv and not comparison.do_precomp):
+            # fall back to the default case: the debug options check single
+            # buckets, sgf2n has no zip, and the comparisons of -c sinv don't
+            # support vectors
+            self.evict_bucket(RefBucket(p_bucket1, self), d)
+            self.evict_bucket(RefBucket(p_bucket2, self), d)
+            return
+        # evict() passes two different buckets of the same depth, which are
+        # evicted as in evict_bucket, but at once, with vectors of size two
+        bt = self.value_type.bit_type
+        p1 = regint.conv(p_bucket1)
+        p2 = regint.conv(p_bucket2)
+        # an empty entry for each bucket
+        empty2 = Entry([t(1 if c == 0 else 0, size=2)
+                        for c, t in enumerate(self.entry_type)])
+        parent = self._paired_ref(p1, p2)
+        entry = parent.pop()
+        parent.ram.writeback()
+        rand2 = bt.concat([bt.get_random_bit(), bt.get_random_bit()])
+        b = if_else(entry.empty(), rand2,
+                    get_bit(entry.x[0], self.D - 1 - d, self.D))
+        block = cond_swap(b, entry, empty2)
+        for c in (0, 1):
+            child = self._paired_ref((p1 << 1) + c, (p2 << 1) + c)
+            child.add(block[c])
+            child.ram.writeback()
     @method_block
     def read_and_renew_index(self, u):
         l_star = random_block(self.D, self.index_type)
@@ -1506,6 +1622,8 @@ class PackedIndexStructure(object):
             self.log_entries_per_block = \
                 self.log_elements_per_block + self.log_entries_per_element
             self.elements_per_block = 2**self.log_elements_per_block
+            if self.log_entries_per_element < 0:
+                self.elements_per_block = self.elements_per_entry
             self.entries_per_element = 2**self.log_entries_per_element
             self.entries_per_block = 2**self.log_entries_per_block
             self.used_bits = self.entries_per_element * sum(self.entry_size)
@@ -1521,6 +1639,8 @@ class PackedIndexStructure(object):
         print('elements per block:', self.elements_per_block)
         print('used bits:', self.used_bits)
         entry_size = [self.used_bits] * self.elements_per_block
+        if self.log_entries_per_element < 0:
+            entry_size = [sum(x) for x in self.split_sizes]
         if real_size > 1:
             # no need to init underlying ORAM, will be initialized implicitely
             self.l = self.storage(real_size, value_type, \
@@ -1540,8 +1660,8 @@ class PackedIndexStructure(object):
             @for_range(real_init_rounds)
             def f(i):
                 if random_init:
-                    self.l[i] = [random_block(self.used_bits, self.value_type) \
-                                     for j in range(self.elements_per_block)]
+                    self.l[i] = [random_block(n, self.value_type) \
+                                     for n in entry_size]
                 else:
                     self.l[i] = [0] * self.elements_per_block
                 time()
