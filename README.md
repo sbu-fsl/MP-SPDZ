@@ -1,3 +1,37 @@
+# MP-SPDZ fork for TKMS
+
+This fork provides the MPC programs and Python client integration used by the
+Threshold Key Management System (TKMS) to generate secret-shared keys and
+refresh their shares. [Upstream MP-SPDZ](https://github.com/data61/MP-SPDZ)
+
+- Packages `ExternalIO` so TKMS can import `ExternalIO.client` and receive share
+  outputs. [ExternalIO](ExternalIO)
+- Curates the program collection around TKMS, with custom circuits for batched
+  key generation and share refresh using Shamir, leakage-resilient, and robust
+  leakage-resilient secret sharing. [Programs/Source](Programs/Source)
+- Adds an allowlist-based tool for pruning program sources after upstream
+  merges. [Scripts/clean-programs.py](Scripts/clean-programs.py)
+
+## Sync with upstream
+
+Add the upstream remote once per clone.
+
+```bash
+git remote add upstream https://github.com/data61/MP-SPDZ.git
+```
+
+From the fork branch, fetch and merge upstream `master`.
+
+```bash
+git fetch upstream && git merge --no-commit --no-ff upstream/master
+```
+
+Resolve any conflicts, review the merge, then commit and push it.
+
+---
+
+The upstream MP-SPDZ README follows.
+
 # Multi-Protocol SPDZ [![Documentation Status](https://readthedocs.org/projects/mp-spdz/badge/?version=latest)](https://mp-spdz.readthedocs.io/en/latest/?badge=latest) [![Build Status](https://dev.azure.com/data61/MP-SPDZ/_apis/build/status/data61.MP-SPDZ?branchName=master)](https://dev.azure.com/data61/MP-SPDZ/_build/latest?definitionId=7&branchName=master) [![Gitter](https://badges.gitter.im/MP-SPDZ/community.svg)](https://gitter.im/MP-SPDZ/community?utm_source=badge&utm_medium=badge&utm_campaign=pr-badge)
 
 This is a software to benchmark various secure multi-party computation

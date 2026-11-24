@@ -45,6 +45,7 @@ ALLOWED_FILES = {
     "personal_client_example.py",
     "robust_lrpss.py",
     "robust_lrss.py",
+    "robust_lrss_key_gen.py",
     "shamir.py",
     "shamir_key_gen.py",
     "shamir_pss.py",
