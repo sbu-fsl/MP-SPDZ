@@ -94,11 +94,13 @@ BitVectorView& BitVectorView::operator &=(const BitVectorView& other)
 {
     assert(size() == other.size());
     size_t i = 0;
+#if defined(__AVX__) || !defined(__x86_64__)
     for (; i + 31 < size_bytes(); i += 32)
     {
         auto j = i / 32;
         set_m256i(j, get_m256i(j) & other.get_m256i(j));
     }
+#endif
     for (; i < size_bytes(); i++)
         bytes[i] &= other.bytes[i];
     return *this;
@@ -108,11 +110,13 @@ BitVector BitVector::operator~() const
 {
     BitVector res(size());
     size_t i = 0;
+#if defined(__AVX__) || !defined(__x86_64__)
     for (; i + 32 < size_bytes(); i += 32)
     {
         auto j = i / 32;
         res.set_m256i(j, ~get_m256i(j));
     }
+#endif
     for (; i < size_bytes(); i++)
         res.bytes[i] = ~bytes[i];
     return res;
